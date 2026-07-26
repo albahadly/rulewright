@@ -40,7 +40,8 @@ jobs:
         run: |
           set -euo pipefail
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          BASE_PATH="/${REPO_NAME}/"
+          REPO_NAME_LOWER="$(printf '%s' "${REPO_NAME}" | tr '[:upper:]' '[:lower:]')"
+          BASE_PATH="/${REPO_NAME_LOWER}/"
           sed -i "s|<base href=\"/\" />|<base href=\"${BASE_PATH}\" />|g" publish/wwwroot/index.html
 
           if [ -f publish/wwwroot/CNAME ]; then
