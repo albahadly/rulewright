@@ -5,6 +5,13 @@
     <!-- A metapackage: it carries no code of its own, only the reference set. -->
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <!--
+      No build output means no PDBs, so the inherited IncludeSymbols would pack an empty
+      .snupkg — which nuget.org rejects outright with "400 The package does not contain any
+      symbol (.pdb) files", failing the push mid-run. Symbols for the actual code live in the
+      five referenced packages.
+    -->
+    <IncludeSymbols>false</IncludeSymbols>
   </PropertyGroup>
 
   <ItemGroup>

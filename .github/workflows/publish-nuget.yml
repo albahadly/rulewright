@@ -28,6 +28,10 @@ on:
         description: 'Type "publish" to confirm pushing packages to nuget.org.'
         required: true
         default: ""
+      version:
+        description: 'Exact version to publish (e.g. 0.1.1). Leave empty to use the odometer. Set this to finish a partially-published release: --skip-duplicate makes re-pushing the packages that already landed a no-op.'
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -63,6 +67,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # An explicit version wins outright. This exists for recovery: if a push run
+          # dies partway, some package IDs hold the version and some do not, and the
+          # odometer below would step past it and strand the ones that already landed
+          # on dependencies that never ship.
+          pinned="${{ github.event.inputs.version }}"
+          if [ -n "$pinned" ]; then
+            if [[ ! "$pinned" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::version input '$pinned' is not a 3-part version"
+              exit 1
+            fi
+            echo "version=$pinned" >> "$GITHUB_OUTPUT"
+            echo "Publishing $pinned (pinned by workflow input)"
+            exit 0
+          fi
+
           # Versions are a base-100 odometer: the last number counts 0..99 then
           # carries, so 0.10.99 -> 0.11.0 and 0.99.99 -> 1.0.0. We work in a
           # single integer "ordinal" = major*10000 + minor*100 + patch.
@@ -123,9 +142,23 @@ jobs:
         with:
           user: ${{ secrets.NUGET_USER }}
 
-      - name: Push Rulewright.* to nuget.org (symbols pushed automatically)
+      # Code packages first, symbols second, rather than letting push carry each .snupkg
+      # alongside its .nupkg. A symbol package nuget.org rejects (a 400, which
+      # --skip-duplicate does not swallow) aborts the whole command mid-glob, and the
+      # packages after it in the glob never ship — leaving a metapackage live whose
+      # dependencies do not exist. Splitting the passes means the code set is always
+      # complete and self-consistent before symbols are attempted.
+      - name: Push Rulewright.* to nuget.org
         run: >
           dotnet nuget push "artifacts/nuget/*.nupkg"
+          --api-key ${{ steps.nuget_login.outputs.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
+          --no-symbols
+
+      - name: Push symbol packages
+        run: >
+          dotnet nuget push "artifacts/nuget/*.snupkg"
           --api-key ${{ steps.nuget_login.outputs.NUGET_API_KEY }}
           --source https://api.nuget.org/v3/index.json
           --skip-duplicate
