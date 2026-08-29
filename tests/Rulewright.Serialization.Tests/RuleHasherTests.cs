@@ -127,4 +127,41 @@ public class RuleHasherTests
             new[] { new RuleAction(RuleAction.RemoveOutputType, "T", "ignored") });
         Assert.Equal(RuleHasher.ComputeHash(viaFactory), RuleHasher.ComputeHash(withStrayValue));
     }
+
+    [Fact]
+    public void Hash_DistinguishesBinaryFloatingLiteralsFromIntegralOnes()
+    {
+        // double/float arithmetic runs in double; long/decimal runs in decimal. Two rules that
+        // differ only in that respect must not share a compiled-delegate cache entry.
+        var integral = new Rule(
+            "r",
+            new ConditionLeaf("A", ConditionOperator.IsNull, null),
+            new[] { new RuleAction(RuleAction.SetOutputType, "T", new LiteralExpression(1L)) });
+        var floating = new Rule(
+            "r",
+            new ConditionLeaf("A", ConditionOperator.IsNull, null),
+            new[] { new RuleAction(RuleAction.SetOutputType, "T", new LiteralExpression(1.0d)) });
+        var single = new Rule(
+            "r",
+            new ConditionLeaf("A", ConditionOperator.IsNull, null),
+            new[] { new RuleAction(RuleAction.SetOutputType, "T", new LiteralExpression(1.0f)) });
+
+        Assert.NotEqual(RuleHasher.ComputeHash(integral), RuleHasher.ComputeHash(floating));
+        Assert.NotEqual(RuleHasher.ComputeHash(integral), RuleHasher.ComputeHash(single));
+    }
+
+    [Fact]
+    public void Hash_DistinguishesFloatingFromDecimalWithTheSameText()
+    {
+        var asDecimal = new Rule(
+            "r",
+            new ConditionLeaf("A", ConditionOperator.Equal, 2.5m),
+            null);
+        var asDouble = new Rule(
+            "r",
+            new ConditionLeaf("A", ConditionOperator.Equal, 2.5d),
+            null);
+
+        Assert.NotEqual(RuleHasher.ComputeHash(asDecimal), RuleHasher.ComputeHash(asDouble));
+    }
 }

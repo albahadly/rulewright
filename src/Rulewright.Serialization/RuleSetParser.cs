@@ -178,10 +178,7 @@ public static class RuleSetParser
                     continue; // wildcard: no condition for this column
                 }
 
-                object? comparand = operators[c] is ConditionOperator.In or ConditionOperator.NotIn
-                    ? ParseArrayCell(cell)
-                    : cell.ToClrValue();
-                leaves.Add(new ConditionLeaf(fields[c], operators[c], comparand));
+                leaves.Add(new ConditionLeaf(fields[c], operators[c], ParseLeafValue(cell)));
             }
 
             ConditionNode ownCondition = leaves.Count switch
@@ -224,12 +221,24 @@ public static class RuleSetParser
         return new RuleSet(expanded, name);
     }
 
-    private static object?[] ParseArrayCell(RuleJsonValue cell)
+    /// <summary>
+    /// Converts a condition leaf's comparison operand by its JSON shape rather than by the
+    /// operator: an array becomes <c>object?[]</c> (recursively), any other node its scalar CLR
+    /// value. In/NotIn take arrays, and a <c>custom</c> function declaring
+    /// <see cref="RuleFunctionValueKind.Array"/> takes one too, so shape — not operator — is what
+    /// decides. Validation has already rejected the object nodes that have no CLR mapping.
+    /// </summary>
+    private static object? ParseLeafValue(RuleJsonValue node)
     {
-        var items = new object?[cell.Items.Count];
-        for (int i = 0; i < cell.Items.Count; i++)
+        if (node.Kind != RuleJsonValueKind.Array)
         {
-            items[i] = cell.Items[i].ToClrValue();
+            return node.ToClrValue();
+        }
+
+        var items = new object?[node.Items.Count];
+        for (int i = 0; i < node.Items.Count; i++)
+        {
+            items[i] = ParseLeafValue(node.Items[i]);
         }
 
         return items;
@@ -311,20 +320,7 @@ public static class RuleSetParser
         object? value = null;
         if (condition.TryGetProperty("value", out RuleJsonValue operand))
         {
-            if (@operator is ConditionOperator.In or ConditionOperator.NotIn)
-            {
-                var items = new object?[operand.Items.Count];
-                for (int i = 0; i < operand.Items.Count; i++)
-                {
-                    items[i] = operand.Items[i].ToClrValue();
-                }
-
-                value = items;
-            }
-            else
-            {
-                value = operand.ToClrValue();
-            }
+            value = ParseLeafValue(operand);
         }
 
         if (condition.TryGetProperty("expression", out RuleJsonValue leftExpression))

@@ -24,7 +24,6 @@
   <Folder Name="/samples/">
     <Project Path="samples/Rulewright.Sample.AspNetCore/Rulewright.Sample.AspNetCore.csproj" />
     <Project Path="samples/Rulewright.Sample.BlazorBuilder/Rulewright.Sample.BlazorBuilder.csproj" />
-    <Project Path="samples/Rulewright.Sample.BlazorBuilder.v2/Rulewright.Sample.BlazorBuilder.v2.csproj" />
     <Project Path="samples/Rulewright.Sample.ConsoleApp/Rulewright.Sample.ConsoleApp.csproj" />
     <Project Path="samples/Rulewright.Sample.DecisionTable/Rulewright.Sample.DecisionTable.csproj" />
     <Project Path="samples/Rulewright.Sample.Functions/Rulewright.Sample.Functions.csproj" />

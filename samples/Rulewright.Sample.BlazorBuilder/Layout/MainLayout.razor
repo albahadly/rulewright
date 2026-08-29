@@ -1,32 +1,3 @@
 @inherits LayoutComponentBase
-@using System.Reflection
 
-<div class="app-shell">
-    <header class="app-header">
-        <h1>Rulewright v@(ProductVersion) Rule Builder</h1>
-        <p>Author and evaluate rule-schema JSON entirely in the browser.</p>
-    </header>
-    <main>
-        @Body
-    </main>
-</div>
-
-@code {
-    private static string ProductVersion => GetProductVersion();
-
-    private static string GetProductVersion()
-    {
-        var informational = typeof(App).Assembly
-            .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?
-            .InformationalVersion;
-
-        if (string.IsNullOrWhiteSpace(informational))
-        {
-            var assemblyVersion = typeof(App).Assembly.GetName().Version;
-            return assemblyVersion is null ? "0.0.0" : assemblyVersion.ToString(3);
-        }
-
-        var metadataSeparator = informational.IndexOf('+');
-        return metadataSeparator < 0 ? informational : informational.Substring(0, metadataSeparator);
-    }
-}
+@Body

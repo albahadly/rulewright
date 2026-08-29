@@ -18,10 +18,19 @@ namespace Rulewright.Execution;
 /// </example>
 public sealed class RulewrightBuilder
 {
+    /// <summary>
+    /// The default <c>MatchesRegex</c> match timeout: one second. A pattern with catastrophic
+    /// backtracking runs against consumer-supplied fact data, so matching is bounded rather than
+    /// able to pin a thread indefinitely; exceeding the bound raises
+    /// <see cref="System.Text.RegularExpressions.RegexMatchTimeoutException"/>.
+    /// </summary>
+    public static TimeSpan DefaultRegexTimeout { get; } = TimeSpan.FromSeconds(1);
+
     private readonly Dictionary<string, IRuleFunction> _functions =
         new Dictionary<string, IRuleFunction>(StringComparer.Ordinal);
 
     private IRuleJsonReader? _jsonReader;
+    private TimeSpan _regexTimeout = DefaultRegexTimeout;
 
     /// <summary>
     /// Sets the JSON reader adapter used by <see cref="RulewrightEngine.LoadRuleSet(string)"/>.
@@ -33,6 +42,33 @@ public sealed class RulewrightBuilder
     public RulewrightBuilder UseJsonReader(IRuleJsonReader reader)
     {
         _jsonReader = reader ?? throw new ArgumentNullException(nameof(reader));
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the per-match time limit for the <c>MatchesRegex</c> operator, overriding
+    /// <see cref="DefaultRegexTimeout"/>. Applies to both execution paths; a match that exceeds it
+    /// raises <see cref="System.Text.RegularExpressions.RegexMatchTimeoutException"/> rather than
+    /// running unbounded.
+    /// </summary>
+    /// <param name="timeout">
+    /// A positive timeout below <see cref="System.Text.RegularExpressions.Regex.InfiniteMatchTimeout"/>'s
+    /// upper bound (about 24 days). An infinite timeout is deliberately not accepted.
+    /// </param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="timeout"/> is not a positive, finite duration Regex accepts.</exception>
+    public RulewrightBuilder UseRegexTimeout(TimeSpan timeout)
+    {
+        // Rejected here rather than at first rule compile, so a misconfiguration surfaces at the
+        // call that caused it. Regex's own ceiling is int.MaxValue milliseconds.
+        if (timeout <= TimeSpan.Zero || timeout.TotalMilliseconds > int.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(timeout),
+                "The regex match timeout must be a positive duration under about 24 days; "
+                + "an unbounded match can pin a thread indefinitely.");
+        }
+
+        _regexTimeout = timeout;
         return this;
     }
 
@@ -95,5 +131,8 @@ public sealed class RulewrightBuilder
     /// snapshot of the registered functions.
     /// </summary>
     public RulewrightEngine Build()
-        => new RulewrightEngine(_jsonReader, new Dictionary<string, IRuleFunction>(_functions, StringComparer.Ordinal));
+        => new RulewrightEngine(
+            _jsonReader,
+            new Dictionary<string, IRuleFunction>(_functions, StringComparer.Ordinal),
+            _regexTimeout);
 }

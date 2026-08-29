@@ -20,8 +20,4 @@
     <ProjectReference Include="..\..\src\Rulewright.Extensions.Functions\Rulewright.Extensions.Functions.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Content Update="wwwroot\examples\**" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
 </Project>

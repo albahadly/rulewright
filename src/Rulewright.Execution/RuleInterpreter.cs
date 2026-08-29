@@ -15,8 +15,10 @@ namespace Rulewright.Execution;
 /// </summary>
 internal static class RuleInterpreter
 {
-    private static readonly ConcurrentDictionary<string, Regex> RegexCache =
-        new ConcurrentDictionary<string, Regex>(StringComparer.Ordinal);
+    // Keyed by pattern *and* timeout: two engines can be configured with different bounds and
+    // must not share a Regex whose timeout was baked in for the other.
+    private static readonly ConcurrentDictionary<(string Pattern, TimeSpan Timeout), Regex> RegexCache =
+        new ConcurrentDictionary<(string, TimeSpan), Regex>();
 
     private static readonly ConcurrentDictionary<(Type Type, string Name), MemberInfo?> MemberCache =
         new ConcurrentDictionary<(Type, string), MemberInfo?>();
@@ -25,6 +27,7 @@ internal static class RuleInterpreter
         ConditionNode node,
         object fact,
         IReadOnlyDictionary<string, IRuleFunction> functions,
+        TimeSpan regexTimeout,
         bool?[]? results,
         Dictionary<ConditionNode, int>? nodeIndex)
     {
@@ -37,7 +40,7 @@ internal static class RuleInterpreter
                     outcome = true;
                     foreach (ConditionNode child in group.Children)
                     {
-                        if (!Evaluate(child, fact, functions, results, nodeIndex))
+                        if (!Evaluate(child, fact, functions, regexTimeout, results, nodeIndex))
                         {
                             outcome = false;
                             break;
@@ -50,7 +53,7 @@ internal static class RuleInterpreter
                     outcome = false;
                     foreach (ConditionNode child in group.Children)
                     {
-                        if (Evaluate(child, fact, functions, results, nodeIndex))
+                        if (Evaluate(child, fact, functions, regexTimeout, results, nodeIndex))
                         {
                             outcome = true;
                             break;
@@ -60,13 +63,13 @@ internal static class RuleInterpreter
                     break;
 
                 default:
-                    outcome = !Evaluate(group.Children[0], fact, functions, results, nodeIndex);
+                    outcome = !Evaluate(group.Children[0], fact, functions, regexTimeout, results, nodeIndex);
                     break;
             }
         }
         else
         {
-            outcome = EvaluateLeaf((ConditionLeaf)node, fact, functions);
+            outcome = EvaluateLeaf((ConditionLeaf)node, fact, functions, regexTimeout);
         }
 
         if (results is not null)
@@ -77,13 +80,17 @@ internal static class RuleInterpreter
         return outcome;
     }
 
-    private static bool EvaluateLeaf(ConditionLeaf leaf, object fact, IReadOnlyDictionary<string, IRuleFunction> functions)
+    private static bool EvaluateLeaf(
+        ConditionLeaf leaf,
+        object fact,
+        IReadOnlyDictionary<string, IRuleFunction> functions,
+        TimeSpan regexTimeout)
     {
         object? fieldValue = leaf.Left is not null
             ? ActionExpressionInterpreter.EvaluateValue(leaf.Left, fact)
             : leaf.Field is null ? fact : ResolvePath(fact, leaf.Field);
 
-        return ApplyOperator(leaf, fieldValue, functions);
+        return ApplyOperator(leaf, fieldValue, functions, regexTimeout);
     }
 
     /// <summary>
@@ -91,7 +98,11 @@ internal static class RuleInterpreter
     /// interpreter and by the compiled path's computed-left-hand-side leaves, so a field
     /// leaf and an expression leaf with the same value compare identically.
     /// </summary>
-    internal static bool ApplyOperator(ConditionLeaf leaf, object? fieldValue, IReadOnlyDictionary<string, IRuleFunction> functions)
+    internal static bool ApplyOperator(
+        ConditionLeaf leaf,
+        object? fieldValue,
+        IReadOnlyDictionary<string, IRuleFunction> functions,
+        TimeSpan regexTimeout)
     {
         switch (leaf.Operator)
         {
@@ -134,7 +145,7 @@ internal static class RuleInterpreter
                     && endsText.EndsWith((string)leaf.Value!, StringComparison.Ordinal);
 
             case ConditionOperator.MatchesRegex:
-                return fieldValue is string regexText && GetRegex((string)leaf.Value!).IsMatch(regexText);
+                return fieldValue is string regexText && GetRegex((string)leaf.Value!, regexTimeout).IsMatch(regexText);
 
             case ConditionOperator.In:
                 return IsInSet(fieldValue, (object?[])leaf.Value!);
@@ -206,6 +217,6 @@ internal static class RuleInterpreter
             ?? key.Type.GetField(key.Name, relaxed);
     }
 
-    private static Regex GetRegex(string pattern)
-        => RegexCache.GetOrAdd(pattern, p => new Regex(p, RegexOptions.Compiled));
+    private static Regex GetRegex(string pattern, TimeSpan timeout)
+        => RegexCache.GetOrAdd((pattern, timeout), key => new Regex(key.Pattern, RegexOptions.Compiled, key.Timeout));
 }

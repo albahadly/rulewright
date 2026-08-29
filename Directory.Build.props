@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>Rulewright Contributors</Authors>
     <Product>Rulewright</Product>
     <Copyright>Copyright (c) 2026 Rulewright Contributors</Copyright>

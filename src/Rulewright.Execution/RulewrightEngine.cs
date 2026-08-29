@@ -13,6 +13,9 @@ namespace Rulewright.Execution;
 /// compiles rules to delegates per fact type via expression trees, caches the compiled
 /// delegates by rule content hash, and evaluates facts against them. Thread-safe: one
 /// engine instance can serve concurrent evaluations.
+///
+/// <para>Build one with <see cref="RulewrightBuilder"/>, which also carries the
+/// <c>MatchesRegex</c> match timeout — see <see cref="RulewrightBuilder.UseRegexTimeout"/>.</para>
 /// </summary>
 public sealed class RulewrightEngine
 {
@@ -21,15 +24,20 @@ public sealed class RulewrightEngine
 
     private readonly IRuleJsonReader? _jsonReader;
     private readonly IReadOnlyDictionary<string, IRuleFunction> _functions;
+    private readonly TimeSpan _regexTimeout;
     private readonly ReadOnlyCollection<string> _registeredFunctions;
     private readonly ReadOnlyCollection<RuleFunctionDescriptor> _functionCatalog;
     private readonly ConcurrentDictionary<CompiledCacheKey, object> _compiledRules =
         new ConcurrentDictionary<CompiledCacheKey, object>();
 
-    internal RulewrightEngine(IRuleJsonReader? jsonReader, IReadOnlyDictionary<string, IRuleFunction> functions)
+    internal RulewrightEngine(
+        IRuleJsonReader? jsonReader,
+        IReadOnlyDictionary<string, IRuleFunction> functions,
+        TimeSpan regexTimeout)
     {
         _jsonReader = jsonReader;
         _functions = functions;
+        _regexTimeout = regexTimeout;
 
         var names = new List<string>(functions.Keys);
         names.Sort(StringComparer.Ordinal);
@@ -200,6 +208,7 @@ public sealed class RulewrightEngine
     /// <param name="options">Per-evaluation options; defaults to <see cref="EvaluationOptions.Default"/>.</param>
     /// <exception cref="ArgumentNullException"><paramref name="ruleSet"/> or <paramref name="fact"/> is null.</exception>
     /// <exception cref="RuleCompilationException">A rule cannot be compiled against <typeparamref name="TFact"/> (missing field path, incompatible value type).</exception>
+    /// <exception cref="System.Text.RegularExpressions.RegexMatchTimeoutException">A <c>MatchesRegex</c> match exceeded the engine's regex timeout.</exception>
     public RuleEvaluationResult Evaluate<TFact>(LoadedRuleSet ruleSet, TFact fact, EvaluationOptions? options = null)
     {
         if (ruleSet is null)
@@ -222,7 +231,7 @@ public sealed class RulewrightEngine
                 options,
                 CompilationMode.Interpreted,
                 (entry, results) => RuleInterpreter.Evaluate(
-                    entry.Rule.Condition, boxedFact, _functions, results, entry.NodeIndex),
+                    entry.Rule.Condition, boxedFact, _functions, _regexTimeout, results, entry.NodeIndex),
                 (entry, isElse, running) => ApplyInterpretedOutputs(entry, isElse, boxedFact, running));
         }
 
@@ -374,7 +383,7 @@ public sealed class RulewrightEngine
 
         return (CompiledRule<TFact>)_compiledRules.GetOrAdd(
             key,
-            _ => RuleExpressionCompiler.Compile<TFact>(entry.Rule, _functions, entry.NodeIndex));
+            _ => RuleExpressionCompiler.Compile<TFact>(entry.Rule, _functions, _regexTimeout, entry.NodeIndex));
     }
 
     private void ValidateFunctions(Rule rule, ConditionNode node)

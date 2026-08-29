@@ -227,10 +227,10 @@ public static class RuleHasher
                 builder.Append(ul.ToString(CultureInfo.InvariantCulture));
                 break;
             case float f:
-                builder.Append(((double)f).ToString("R", CultureInfo.InvariantCulture));
+                AppendBinaryFloating(builder, f);
                 break;
             case double d:
-                builder.Append(d.ToString("R", CultureInfo.InvariantCulture));
+                AppendBinaryFloating(builder, d);
                 break;
             case decimal m:
                 // G29 drops trailing zeros so 10.50 and 10.5 hash identically.
@@ -259,6 +259,18 @@ public static class RuleHasher
                 break;
         }
     }
+
+    /// <summary>
+    /// Renders a <see cref="double"/>/<see cref="float"/> with a <c>d</c> suffix. Binary
+    /// floating-point literals make arithmetic run in <c>double</c> where integral and
+    /// <see cref="decimal"/> literals make it run in <c>decimal</c> (1/3 differs between the
+    /// two), so they must not share a canonical form — and therefore a compiled-delegate cache
+    /// entry — with a numerically equal literal of another kind. JSON numbers parse to
+    /// long/decimal whenever representable, so this only tags values that genuinely behave
+    /// differently.
+    /// </summary>
+    private static void AppendBinaryFloating(StringBuilder builder, double value)
+        => builder.Append(value.ToString("R", CultureInfo.InvariantCulture)).Append('d');
 
     private static void AppendString(StringBuilder builder, string value)
     {

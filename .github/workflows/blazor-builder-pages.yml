@@ -6,8 +6,8 @@ on:
     branches:
       - main
     paths:
-      - samples/Rulewright.Sample.BlazorBuilder.v2/**
-      - .github/workflows/blazor-builder-v2-pages.yml
+      - samples/Rulewright.Sample.BlazorBuilder/**
+      - .github/workflows/blazor-builder-pages.yml
 
 permissions:
   contents: read
@@ -33,8 +33,8 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Publish Rulewright.Sample.BlazorBuilder.v2
-        run: dotnet publish samples/Rulewright.Sample.BlazorBuilder.v2/Rulewright.Sample.BlazorBuilder.v2.csproj -c Release -o publish
+      - name: Publish Rulewright.Sample.BlazorBuilder
+        run: dotnet publish samples/Rulewright.Sample.BlazorBuilder/Rulewright.Sample.BlazorBuilder.csproj -c Release -o publish
 
       - name: Configure project-site path and SPA fallback
         run: |

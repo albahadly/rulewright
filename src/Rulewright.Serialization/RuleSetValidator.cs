@@ -243,6 +243,13 @@ public static class RuleSetValidator
                 errors.Add(new RuleValidationError(path, "'name' (a non-empty string) is required when operator is \"custom\"."));
             }
 
+            // A custom function's operand is whatever it declares (scalar, text, or an array such
+            // as IsBetweenInclusive's [min, max]). Only object nodes have no CLR mapping.
+            if (leaf.TryGetProperty("value", out RuleJsonValue customValue))
+            {
+                ValidateOperandShape(customValue, path + "/value", errors);
+            }
+
             return;
         }
 
@@ -359,6 +366,30 @@ public static class RuleSetValidator
                 }
 
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Checks that a condition operand carries only nodes the parser can turn into CLR values —
+    /// scalars, nulls, and arrays of the same. Object nodes have no mapping and are reported at
+    /// the pointer of the offending node rather than surfacing later as a parse failure.
+    /// </summary>
+    private static void ValidateOperandShape(RuleJsonValue value, string path, List<RuleValidationError> errors)
+    {
+        if (value.Kind == RuleJsonValueKind.Object)
+        {
+            errors.Add(new RuleValidationError(path, "'value' must be a scalar, null, or an array; objects are not valid operands."));
+            return;
+        }
+
+        if (value.Kind != RuleJsonValueKind.Array)
+        {
+            return;
+        }
+
+        for (int i = 0; i < value.Items.Count; i++)
+        {
+            ValidateOperandShape(value.Items[i], path + "/" + i.ToString(CultureInfo.InvariantCulture), errors);
         }
     }
 

@@ -48,6 +48,13 @@ Rulewright.Json.NewtonsoftJson ┤ (adapters: JSON text → neutral DOM)
   compiled delegate — so canvas edits and metadata changes never trigger recompiles,
   while any semantic change always does. Two rules with identical bodies share one
   compiled delegate.
+- Numeric literals are rendered by **numeric behaviour, not just by text**: a `double`/`float`
+  literal carries a `d` suffix in the canonical form, because binary floating point makes
+  arithmetic run in `double` where integral and `decimal` literals make it run in `decimal`
+  (`1/3` differs between the two). Without that, `1.0d` and `1L` would render alike and the
+  second rule would silently execute the first rule's compiled delegate. JSON numbers parse to
+  `long`/`decimal` whenever representable, so the suffix only ever tags values that genuinely
+  behave differently.
 
 ## Compilation strategy
 
@@ -68,8 +75,14 @@ Rulewright.Json.NewtonsoftJson ┤ (adapters: JSON text → neutral DOM)
   Exact equality against a non-representable constant folds to a compile-time
   `false`/`true`.
 - **Strings** are ordinal: `Contains`/`StartsWith`/`EndsWith` with
-  `StringComparison.Ordinal`, ordering via `Comparer<string>` (ordinal). `MatchesRegex`
-  embeds a `RegexOptions.Compiled` regex constructed at rule-compile time.
+  `StringComparison.Ordinal`, ordering via `string.CompareOrdinal` (**not**
+  `Comparer<string>.Default`, which orders by the ambient culture and would make the same
+  rule and fact answer differently per machine), equality via `==`/`EqualityComparer<string>`,
+  and `In`/`NotIn` via an ordinal `HashSet<string>`. `MatchesRegex` embeds a
+  `RegexOptions.Compiled` regex constructed at rule-compile time, with a bounded match
+  timeout (`RulewrightBuilder.UseRegexTimeout`, one second by default) so a pattern with
+  catastrophic backtracking raises `RegexMatchTimeoutException` instead of pinning the
+  thread on consumer-supplied data.
 - **`In`/`NotIn`** build a typed `HashSet<T>` once at compile time and emit a
   `Contains` call.
 - **Custom functions** are looked up in the registry at compile time and embedded as
@@ -186,6 +199,13 @@ Identical across compiled and interpreted paths, exercised by shared tests:
 | `NotIn` with null field | `true` |
 | Any other operator with a null field/path | `false` |
 | `custom` with a null path | function is called with `null` fieldValue |
+
+A leaf's `value` is converted **by its JSON shape, not by its operator**: an array becomes
+`object?[]` (recursively), any other node its scalar CLR value. That is what `In`/`NotIn` need,
+and equally what a `custom` function declaring `RuleFunctionValueKind.Array` needs — the
+built-in `IsBetweenInclusive` takes `[min, max]`. Object nodes have no CLR mapping and
+`RuleSetValidator` rejects them at the pointer of the offending node, so a document that
+validates can always be parsed.
 
 Missing members on **typed** facts are compile-time errors; missing keys on
 **dictionary** facts resolve to null (there is no compile-time shape to check).

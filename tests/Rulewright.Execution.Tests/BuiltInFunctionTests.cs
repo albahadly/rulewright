@@ -3,6 +3,7 @@ using System.Linq;
 using Rulewright.Core;
 using Rulewright.Extensions.Functions;
 using Xunit;
+using static Rulewright.Execution.Tests.TestEngine;
 
 namespace Rulewright.Execution.Tests;
 
@@ -126,5 +127,30 @@ public class BuiltInFunctionTests
     {
         Assert.Throws<ArgumentException>(() => new NamedRuleFunction(string.Empty, (f, v) => true));
         Assert.Throws<ArgumentNullException>(() => new NamedRuleFunction("x", null!));
+    }
+
+    [Fact]
+    public void IsBetweenInclusive_FromJsonRule_CompiledAndInterpreted()
+    {
+        // The array-valued custom operand has to survive the JSON parser, not just a direct
+        // IRuleFunction.Evaluate call — that is the only way a consumer reaches this function.
+        const string rule =
+            "{\"field\":\"Customer.Age\",\"operator\":\"custom\",\"name\":\"IsBetweenInclusive\",\"value\":[18,65]}";
+
+        OrderFact poco = DefaultFact();
+        poco.Customer.Age = 21;
+        Assert.True(Matches(rule, poco));
+
+        poco.Customer.Age = 70;
+        Assert.False(Matches(rule, poco));
+
+        Assert.True(Matches(rule, new Dictionary<string, object?>
+        {
+            ["Customer"] = new Dictionary<string, object?> { ["Age"] = 21L },
+        }));
+        Assert.False(Matches(rule, new Dictionary<string, object?>
+        {
+            ["Customer"] = new Dictionary<string, object?> { ["Age"] = 70L },
+        }));
     }
 }

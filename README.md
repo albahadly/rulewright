@@ -140,6 +140,18 @@ The catalog covers what the closed operator set deliberately doesn't: `IsNullOrE
 injectable clock). Each is **total** — an unexpected value type yields `false`, never an
 exception. Write your own with `new NamedRuleFunction("MyCheck", (field, value) => …)`.
 
+A `custom` leaf's `value` is whatever its function expects — a scalar, a string, or an array
+such as `IsBetweenInclusive`'s `[min, max]`:
+
+```json
+{ "field": "Customer.Age", "operator": "custom", "name": "IsBetweenInclusive", "value": [18, 65] }
+```
+
+`MatchesRegex` patterns run against consumer-supplied fact data, so matching is time-bounded:
+one second by default, raising `RegexMatchTimeoutException` rather than letting a pattern with
+catastrophic backtracking pin a thread. Change the bound with
+`.UseRegexTimeout(TimeSpan.FromMilliseconds(250))`.
+
 ### Field resolution
 
 `"field": "Customer.Age"` resolves a dotted path against the fact:
@@ -317,8 +329,7 @@ never drift from what the engine actually accepts.
 | [`Rulewright.Sample.Functions`](samples/Rulewright.Sample.Functions) | The three ways to register `custom`-operator functions together: `RegisterBuiltInFunctions`, an inline `RegisterFunction` delegate, and `RegisterFunctionsFrom` assembly discovery. |
 | [`Rulewright.Sample.DecisionTable`](samples/Rulewright.Sample.DecisionTable) | Loading `decisionTable` documents end to end, contrasting `hitPolicy: "first"` (one row wins) against `"collect"` (every matching row's actions apply). |
 | [`Rulewright.Sample.NetFramework48`](samples/Rulewright.Sample.NetFramework48) | A .NET Framework 4.8 smoke test proving the netstandard2.0 packages work end to end outside .NET (Core). |
-| [`Rulewright.Sample.BlazorBuilder`](samples/Rulewright.Sample.BlazorBuilder) | The v3 rule builder: a Blazor WebAssembly app that authors/edits rule-schema JSON with a visual condition-tree and action/expression editor (driven by `RuleSchemaCatalog`), plus in-browser evaluate/trace — no server, no round trip. |
-| [`Rulewright.Sample.BlazorBuilder.v2`](samples/Rulewright.Sample.BlazorBuilder.v2) | A freeform, drag-and-drop rule builder with a hand-rolled dark-themed node canvas (palette → drag nodes onto a canvas → wire them together) in the style of n8n/Logic Apps/Node-RED — covers the full authoring surface (all condition operators, computed value-expressions, all four action types, else branches, custom functions) and can load any of the `examples/` rule files onto the canvas — backed by the real engine for Validate/Test, no simulation. |
+| [`Rulewright.Sample.BlazorBuilder`](samples/Rulewright.Sample.BlazorBuilder) | The v3 rule builder: a Blazor WebAssembly app with a freeform, drag-and-drop dark-themed node canvas (palette → drag nodes onto a canvas → wire them together) in the style of n8n/Logic Apps/Node-RED. Covers the full authoring surface — all condition operators, computed value-expressions, all four action types, else branches, custom functions, and multi-rule sets — and can load any of the `examples/` rule files onto the canvas. Backed by the real engine for Validate/Test, in-browser: no server, no round trip, no simulation. |
 
 Build rule JSON files in the hosted editor: https://albahadly.github.io/rulewright
 
@@ -377,9 +388,10 @@ Called out explicitly so expectations are clear:
   stateless, single-pass evaluation. Rule outputs never feed other rules' inputs.
 - **No persistence layer.** Storing rule JSON is your application's concern; this
   library parses, validates, compiles, and executes.
-- **No UI in v1.** The Blazor rule builder (`Rulewright.Sample.BlazorBuilder`, v3)
-  consumes the schema's `layout` key and the JSON Schema validator built here as its
-  contract; it does not use a canvas/`layout` yet (see its README/skill notes).
+- **No UI in v1.** The Blazor rule builder (`Rulewright.Sample.BlazorBuilder`, v3) is a
+  sample, not part of the library, and it treats the JSON Schema and the validator built
+  here as its contract. Its canvas positions nodes by auto-layout rather than persisting
+  the schema's `layout` key — round-tripping `layout` is still a follow-up.
 
 ## Roadmap
 
@@ -392,12 +404,14 @@ Called out explicitly so expectations are clear:
   `engine.RegisteredFunctions`), System.Text.Json **and** Newtonsoft.Json adapters, and a
   published NRules/RulesEngine benchmark comparison (`docs/benchmarks.md`) have all shipped.
 - **v3 (current)** — Blazor WebAssembly rule builder (`samples/Rulewright.Sample.BlazorBuilder`)
-  emitting/consuming this exact schema, running fully client-side. First milestone shipped:
-  visual condition-tree (AND/OR/NOT + leaves) and action/computed-expression editing for
-  single-rule documents, backed by `RuleSchemaCatalog` for every operator/action picker, plus
-  a live evaluate/trace panel. `rules` sets and `decisionTable` documents fall back to the raw
-  JSON view (visual editing for those, and a canvas `layout`, are follow-ups, not yet started).
-  From v1 on, changes to the `layout` contract or the JSON Schema are treated as breaking changes.
+  emitting/consuming this exact schema, running fully client-side. Shipped: a freeform
+  drag-and-drop node canvas covering the whole authoring surface — every condition operator,
+  computed value-expressions, all four action types, `else` branches, and `custom` functions —
+  authoring **multi-rule sets** (one Rule anchor node per rule; two or more export
+  `{ name, rules[] }`), with import of any `examples/` document and per-rule evaluate/trace
+  against the real engine. Not yet: `decisionTable` documents on the canvas, and persisting
+  node positions into the schema's `layout` key (both follow-ups). From v1 on, changes to the
+  `layout` contract or the JSON Schema are treated as breaking changes.
 
 ## Contributing
 

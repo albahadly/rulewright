@@ -224,32 +224,29 @@ gotchas before inventing a verification flow.
 
 ---
 
-## Blazor rule builders (`samples/`)
+## Blazor rule builder (`samples/Rulewright.Sample.BlazorBuilder`)
 
-Two independent WASM samples that both author **this exact rule schema**, fully client-side (they
-reference Core/Serialization/Execution/Json.SystemText/Extensions.Functions and run the real engine
-in the browser — no backend):
+One WASM sample that authors **this exact rule schema**, fully client-side (it references
+Core/Serialization/Execution/Json.SystemText/Extensions.Functions and runs the real engine in the
+browser — no backend). A freeform **drag-and-drop node canvas** (n8n / Logic-Apps style,
+hand-rolled, dark theme).
 
-- **`Rulewright.Sample.BlazorBuilder`** — a form/tree-based editor: a C# Draft-DTO layer
-  (`Drafts/`) mirrors the immutable domain tree, a `RuleDocumentState` keeps raw JSON as the source
-  of truth, every visual edit round-trips through JSON text, and pickers are driven by
-  `RuleSchemaCatalog`.
-- **`Rulewright.Sample.BlazorBuilder.v2`** — a freeform **drag-and-drop node canvas** (n8n /
-  Logic-Apps style, hand-rolled, dark theme). **All interactive state lives in
-  `wwwroot/js/rule-canvas.js`** (a single IIFE, `window.rulewrightFlowBuilder`); `Pages/Canvas.razor`
-  is just the page shell plus two `[JSInvokable]` bridge methods to the real engine —
-  `ValidateRule(ruleJson)` (→ `RuleSetValidator`) and `EvaluateRule(ruleJson, factJson)` (→
-  `LoadRuleSet` + `Evaluate` with tracing, returning a **per-rule** breakdown keyed by rule id).
-  It builds a **whole rule set at once**: each rule is a **Rule anchor node** (condition tree → its
-  Condition pin; its output → Action nodes); 1 Rule node exports a bare rule, 2+ export
-  `{ name, rules[] }`. Trace highlighting works by zipping a JS "id tree" (same shape as the built
-  condition) against the engine's `ConditionTraceNode` tree positionally. **When editing this file,
-  re-derive the invariants documented in its verify SKILL.md** (e.g. import uses `valueToFieldText`,
-  not `JSON.stringify`, for string fields; `addConnection` auto-grows dynamic-input slots — don't
-  pre-grow). `decisionTable` documents are not supported by the v2 canvas (they show a toast).
+**All interactive state lives in `wwwroot/js/rule-canvas.js`** (a single IIFE,
+`window.rulewrightFlowBuilder`); `Pages/Canvas.razor` is just the page shell plus two
+`[JSInvokable]` bridge methods to the real engine — `ValidateRule(ruleJson)` (→
+`RuleSetValidator`) and `EvaluateRule(ruleJson, factJson)` (→ `LoadRuleSet` + `Evaluate` with
+tracing, returning a **per-rule** breakdown keyed by rule id). It builds a **whole rule set at
+once**: each rule is a **Rule anchor node** (condition tree → its Condition pin; its output →
+Action nodes); 1 Rule node exports a bare rule, 2+ export `{ name, rules[] }`. Trace highlighting
+works by zipping a JS "id tree" (same shape as the built condition) against the engine's
+`ConditionTraceNode` tree positionally. **When editing this file, re-derive the invariants
+documented in its verify SKILL.md** (e.g. import uses `valueToFieldText`, not `JSON.stringify`, for
+string fields; `addConnection` auto-grows dynamic-input slots — don't pre-grow). `decisionTable`
+documents are not supported by the canvas (they show a toast).
 
-Neither Blazor sample is a test project; changes there don't affect the 376-test count, but must be
-browser-verified.
+The Blazor sample is not a test project; changes there don't affect the test count, but must be
+browser-verified. It is deployed to GitHub Pages by
+`.github/workflows/blazor-builder-pages.yml`.
 
 ---
 

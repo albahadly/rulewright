@@ -28,6 +28,9 @@ internal static class RuleExpressionCompiler
     private static readonly MethodInfo StringEndsWithMethod =
         typeof(string).GetMethod(nameof(string.EndsWith), new[] { typeof(string), typeof(StringComparison) })!;
 
+    private static readonly MethodInfo StringCompareOrdinalMethod =
+        typeof(string).GetMethod(nameof(string.CompareOrdinal), new[] { typeof(string), typeof(string) })!;
+
     private static readonly MethodInfo RegexIsMatchMethod =
         typeof(Regex).GetMethod(nameof(Regex.IsMatch), new[] { typeof(string) })!;
 
@@ -48,16 +51,17 @@ internal static class RuleExpressionCompiler
     internal static CompiledRule<TFact> Compile<TFact>(
         Rule rule,
         IReadOnlyDictionary<string, IRuleFunction> functions,
+        TimeSpan regexTimeout,
         Dictionary<ConditionNode, int> nodeIndex)
     {
         ParameterExpression fact = Expression.Parameter(typeof(TFact), "fact");
         ParameterExpression results = Expression.Parameter(typeof(bool?[]), "results");
 
-        var fastContext = new Context(rule, functions, null, null);
+        var fastContext = new Context(rule, functions, regexTimeout, null, null);
         Expression fastBody = BuildNode(rule.Condition, fact, fastContext);
         Func<TFact, bool> predicate = Expression.Lambda<Func<TFact, bool>>(fastBody, fact).Compile();
 
-        var tracedContext = new Context(rule, functions, results, nodeIndex);
+        var tracedContext = new Context(rule, functions, regexTimeout, results, nodeIndex);
         Expression tracedBody = BuildNode(rule.Condition, fact, tracedContext);
         Func<TFact, bool?[], bool> tracedPredicate =
             Expression.Lambda<Func<TFact, bool?[], bool>>(tracedBody, fact, results).Compile();
@@ -260,11 +264,13 @@ internal static class RuleExpressionCompiler
         internal Context(
             Rule rule,
             IReadOnlyDictionary<string, IRuleFunction> functions,
+            TimeSpan regexTimeout,
             ParameterExpression? results,
             Dictionary<ConditionNode, int>? nodeIndex)
         {
             Rule = rule;
             Functions = functions;
+            RegexTimeout = regexTimeout;
             Results = results;
             NodeIndex = nodeIndex;
         }
@@ -272,6 +278,8 @@ internal static class RuleExpressionCompiler
         internal Rule Rule { get; }
 
         internal IReadOnlyDictionary<string, IRuleFunction> Functions { get; }
+
+        internal TimeSpan RegexTimeout { get; }
 
         internal ParameterExpression? Results { get; }
 
@@ -328,7 +336,8 @@ internal static class RuleExpressionCompiler
                 ApplyOperatorMethod,
                 Expression.Constant(leaf, typeof(ConditionLeaf)),
                 left,
-                Expression.Constant(context.Functions, typeof(IReadOnlyDictionary<string, IRuleFunction>)));
+                Expression.Constant(context.Functions, typeof(IReadOnlyDictionary<string, IRuleFunction>)),
+                Expression.Constant(context.RegexTimeout, typeof(TimeSpan)));
         }
 
         if (leaf.Field is null)
@@ -533,6 +542,16 @@ internal static class RuleExpressionCompiler
                     Expression.Constant(wideComparand, wide));
             }
         }
+        else if (type == typeof(string))
+        {
+            // Strings order ordinally — Comparer<string>.Default would order by the ambient
+            // culture, making the same rule and fact answer differently per machine and
+            // disagreeing with the interpreter's string.CompareOrdinal.
+            comparison = MakeOrdering(
+                leaf.Operator,
+                Expression.Call(StringCompareOrdinalMethod, value, Expression.Constant(ConvertConstant(comparand, type, leaf, context), type)),
+                Expression.Constant(0));
+        }
         else
         {
             object converted = ConvertConstant(comparand, type, leaf, context);
@@ -543,7 +562,7 @@ internal static class RuleExpressionCompiler
             }
             catch (InvalidOperationException)
             {
-                // Types without comparison operators (string, Guid, …): Comparer<T>.Default.
+                // Types without comparison operators (Guid, …): Comparer<T>.Default.
                 comparison = MakeOrdering(leaf.Operator, ComparerCall(value, constant, type), Expression.Constant(0));
             }
         }
@@ -690,7 +709,9 @@ internal static class RuleExpressionCompiler
     {
         try
         {
-            return new Regex(pattern, RegexOptions.Compiled);
+            // Bounded: the pattern comes from the rule author, the subject from consumer data,
+            // so a catastrophic backtracker must fail loudly instead of pinning the thread.
+            return new Regex(pattern, RegexOptions.Compiled, context.RegexTimeout);
         }
         catch (ArgumentException ex)
         {
