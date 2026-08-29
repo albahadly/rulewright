@@ -245,9 +245,18 @@ in the benchmark suite rather than hidden.
 
 ## Multi-targeting
 
-Libraries target `netstandard2.0;net8.0`. Everything is written against the
-netstandard2.0 API surface; C# language features used are syntax-only (no
-`IsExternalInit`, no `System.Index`). The net48 leg is enforced three ways: the test
-projects run on net48, the `Rulewright.Sample.NetFramework48` smoke test runs in CI,
-and the adapter's netstandard2.0 build takes the System.Text.Json 8.x package only
-for that target (net8.0 uses the in-box copy).
+Libraries target `net48;netstandard2.0;net8.0;net10.0`, set once in
+`src/Directory.Build.props`. Everything is written against the netstandard2.0 API
+surface; C# language features used are syntax-only (no `IsExternalInit`, no
+`System.Index`), which is why no compiler shims are needed for the down-level legs.
+The net48 leg is enforced three ways: the test projects run on net48, the
+`Rulewright.Sample.NetFramework48` smoke test runs in CI, and the System.Text.Json
+adapter takes the package reference only on `net48`/`netstandard2.0` (net8.0 and
+net10.0 use the in-box copy).
+
+Trim and NativeAOT are deliberately **not** claimed. Compilation is
+`Expression.Lambda(...).Compile()`, and the compiler builds typed
+`HashSet<T>`/`EqualityComparer<T>` through `MakeGenericType` and
+`Activator.CreateInstance` — dynamic code generation by design, so the AOT analyzer's
+warnings would be accurate rather than noise. Under NativeAOT a consumer uses
+dictionary facts and gets `CompilationMode.Interpreted`, which the result reports.

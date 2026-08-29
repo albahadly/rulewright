@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <Description>Rulewright execution engine: expression-tree rule compiler, dynamic-fact interpreter fallback, thread-safe compiled delegate cache, and the RulewrightBuilder/RulewrightEngine public API.</Description>
   </PropertyGroup>
 

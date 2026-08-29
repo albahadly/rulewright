@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <Description>System.Text.Json adapter for Rulewright: implements IRuleJsonReader and JsonElement fact helpers.</Description>
   </PropertyGroup>
 
@@ -9,9 +8,9 @@
     <ProjectReference Include="..\Rulewright.Serialization\Rulewright.Serialization.csproj" />
   </ItemGroup>
 
-  <!-- System.Text.Json is in-box on net8.0; only the netstandard2.0 build needs the package. -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-    <PackageReference Include="System.Text.Json" Version="10.0.10" />
+  <!-- System.Text.Json is in-box from net8.0 on; only the down-level legs need the package. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0' or '$(TargetFramework)' == 'net48'">
+    <PackageReference Include="System.Text.Json" />
   </ItemGroup>
 
 </Project>

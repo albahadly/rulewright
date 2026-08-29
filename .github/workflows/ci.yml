@@ -39,3 +39,15 @@ jobs:
         run: dotnet test Rulewright.slnx -c Release --no-build -f net8.0
       - name: Console sample smoke test
         run: dotnet run --project samples/Rulewright.Sample.ConsoleApp -c Release --no-build
+
+      # Packaging is verified on every PR rather than discovered at release time: the
+      # publish workflow runs this same pack, and a broken nuspec there means a tag that
+      # cannot ship.
+      - name: Pack (verify the publishable set)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for project in src/*/*.csproj; do
+            dotnet pack "$project" -c Release -o artifacts/nuget
+          done
+          ls -1 artifacts/nuget

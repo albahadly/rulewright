@@ -31,6 +31,7 @@
     <Project Path="samples/Rulewright.Sample.NewtonsoftJson/Rulewright.Sample.NewtonsoftJson.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/Rulewright/Rulewright.csproj" />
     <Project Path="src/Rulewright.Core/Rulewright.Core.csproj" />
     <Project Path="src/Rulewright.Execution/Rulewright.Execution.csproj" />
     <Project Path="src/Rulewright.Extensions.Functions/Rulewright.Extensions.Functions.csproj" />

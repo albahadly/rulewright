@@ -1,0 +1,131 @@
+name: Publish to NuGet
+
+# Publishes the Rulewright.* packages to nuget.org.
+#
+# PUBLISHING IS DELIBERATE, NOT AUTOMATIC. Pushing to nuget.org cannot be undone —
+# a version can be unlisted but never removed — so the trigger is an explicit act:
+# push a `v*` tag, or run the workflow by hand from the Actions tab and type the
+# confirmation.
+#
+# The version comes from <VersionPrefix> in src/Directory.Build.props and increments
+# as an odometer past whatever is already on nuget.org (see the Compute version step).
+#
+# Auth is nuget.org Trusted Publishing (OIDC), not a long-lived API key: this job
+# exchanges a GitHub-issued token for a NuGet API key that is valid for one hour.
+# That requires a one-time Trusted Publishing policy on nuget.org (Account ->
+# Trusted Publishing) pointing at this exact repository and workflow file:
+#   Repository Owner: albahadly   Repository: Rulewright   Workflow File: publish-nuget.yml
+# plus a NUGET_USER repository secret holding the nuget.org profile name (not
+# email) to authenticate as. No NUGET_API_KEY secret is used or needed.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "publish" to confirm pushing packages to nuget.org.'
+        required: true
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Pack and push Rulewright.* to nuget.org
+    runs-on: ubuntu-latest
+    # A manual run has to say so in as many words. A tag push is already deliberate.
+    if: >
+      github.event_name == 'push' ||
+      github.event.inputs.confirm == 'publish'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      # A tag can be pushed to any commit, including one that never saw CI, so the
+      # gate is re-run here rather than assumed.
+      - name: Build (all TFMs)
+        run: dotnet build Rulewright.slnx -c Release
+
+      - name: Test (net8.0)
+        run: dotnet test Rulewright.slnx -c Release --no-build -f net8.0
+
+      - name: Compute version (auto-increment, or honor a manual VersionPrefix bump)
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Versions are a base-100 odometer: the last number counts 0..99 then
+          # carries, so 0.10.99 -> 0.11.0 and 0.99.99 -> 1.0.0. We work in a
+          # single integer "ordinal" = major*10000 + minor*100 + patch.
+          #
+          #   - If <VersionPrefix> in the file is HIGHER than the newest version
+          #     already on nuget.org, you bumped it by hand -> publish it exactly
+          #     (no increment).
+          #   - Otherwise -> publish one odometer step past the last release.
+          #
+          # So leaving VersionPrefix alone auto-increments; raising it pins the
+          # next version to whatever you typed, and auto-increment resumes from
+          # there on the following release.
+          prefix=$(grep -oP '(?<=<VersionPrefix>)[0-9]+\.[0-9]+\.[0-9]+' src/Directory.Build.props | head -n1)
+          if [ -z "$prefix" ]; then
+            echo "::error::Could not read a 3-part <VersionPrefix> from src/Directory.Build.props"
+            exit 1
+          fi
+          IFS=. read -r vmaj vmin vpatch <<< "$prefix"
+          manual_ordinal=$((10#$vmaj * 10000 + 10#$vmin * 100 + 10#$vpatch))
+
+          # Newest published version of the metapackage (all Rulewright.* packages
+          # are versioned together), as an ordinal; -1 if none yet.
+          latest_ordinal=-1
+          versions=$(curl -fsSL "https://api.nuget.org/v3-flatcontainer/rulewright/index.json" \
+            | jq -r '.versions[]?' 2>/dev/null || true)
+          while IFS= read -r v; do
+            [[ "$v" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || continue
+            ord=$((10#${BASH_REMATCH[1]} * 10000 + 10#${BASH_REMATCH[2]} * 100 + 10#${BASH_REMATCH[3]}))
+            (( ord > latest_ordinal )) && latest_ordinal=$ord
+          done <<< "$versions"
+
+          if (( manual_ordinal > latest_ordinal )); then
+            ordinal=$manual_ordinal
+            reason="manual VersionPrefix ($prefix)"
+          else
+            ordinal=$((latest_ordinal + 1))
+            reason="auto-increment past ordinal $latest_ordinal"
+          fi
+          version="$((ordinal / 10000)).$(((ordinal / 100) % 100)).$((ordinal % 100))"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Publishing $version ($reason)"
+
+      # Packs exactly the publishable set rather than the whole solution: a solution-wide
+      # pack also walks the samples, which warns on the Web SDK project and would ship a
+      # sample the moment one lost its IsPackable=false.
+      - name: Pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          for project in src/*/*.csproj; do
+            dotnet pack "$project" -c Release -o artifacts/nuget -p:Version=${{ steps.ver.outputs.version }}
+          done
+
+      # Requested right before the push: the exchanged key is only valid for one hour.
+      - name: NuGet login (OIDC -> short-lived API key)
+        uses: NuGet/login@v1
+        id: nuget_login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push Rulewright.* to nuget.org (symbols pushed automatically)
+        run: >
+          dotnet nuget push "artifacts/nuget/*.nupkg"
+          --api-key ${{ steps.nuget_login.outputs.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate

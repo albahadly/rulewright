@@ -7,9 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
-    <PackageReference Include="NRules" Version="1.0.4" />
-    <PackageReference Include="RulesEngine" Version="6.0.1" />
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="NRules" />
+    <PackageReference Include="RulesEngine" />
   </ItemGroup>
 
   <ItemGroup>

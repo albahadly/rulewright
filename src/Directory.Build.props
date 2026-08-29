@@ -1,15 +1,65 @@
 <Project>
 
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)..'))" />
+  <Import Project="$(MSBuildThisFileDirectory)..\Directory.Build.props" />
 
   <PropertyGroup>
+    <TargetFrameworks>net48;netstandard2.0;net8.0;net10.0</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsPackable>true</IsPackable>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)..\eng\Rulewright.snk</AssemblyOriginatorKeyFile>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <DebugType>portable</DebugType>
+    <Product>Rulewright</Product>
+    <Authors>Rulewright Contributors</Authors>
+    <Copyright>Copyright (c) 2026 Rulewright Contributors</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <NeutralLanguage>en</NeutralLanguage>
+    <VersionPrefix>0.1.1</VersionPrefix>
+    <RepositoryUrl>https://github.com/albahadly/Rulewright</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/albahadly/Rulewright</PackageProjectUrl>
+    <PackageTags>rules-engine;business-rules;json;expression-trees;decision-table;netstandard2.0</PackageTags>
+    <PackageReleaseNotes>See https://github.com/albahadly/Rulewright/releases for release notes.</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
+  <!--
+    No IsTrimmable/IsAotCompatible here, unlike DocWright. Rulewright's whole point is
+    System.Linq.Expressions: rules compile to delegates via Expression.Lambda(...).Compile(),
+    and the compiler additionally builds typed HashSet<T>/EqualityComparer<T> through
+    MakeGenericType and Activator.CreateInstance. That is dynamic code generation by design,
+    so the AOT analyzer's warnings would be true, not noise, and claiming AOT compatibility
+    would be a promise the engine cannot keep. Under NativeAOT a consumer must use the
+    dictionary-fact interpreter path (CompilationMode.Interpreted), which reports itself.
+  -->
+
+  <!-- Building the net48 leg on a non-Windows agent needs the reference assemblies. -->
   <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)../README.md" Pack="true" PackagePath="/" Visible="false" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Each package ships its own README, taken from the project directory, and that file is what
+      NuGet.org renders on the package page. It replaces the repository README, which describes the
+      whole repo including samples and benchmarks and is not something a published package should
+      carry.
+    -->
+    <None Include="README.md" Pack="true" PackagePath="\" Visible="false" />
+    <!--
+      Packed alongside the SPDX expression, not instead of it: the expression is what NuGet.org and
+      corporate feeds read, and the file is what a consumer unzipping the package finds.
+    -->
+    <None Include="$(MSBuildThisFileDirectory)..\LICENSE" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 
 </Project>

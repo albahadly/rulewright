@@ -1,24 +1,20 @@
 <Project>
 
   <PropertyGroup>
-    <LangVersion>latest</LangVersion>
+    <LangVersion>14.0</LangVersion>
     <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
-    <Version>0.1.1</Version>
-    <Authors>Rulewright Contributors</Authors>
-    <Product>Rulewright</Product>
-    <Copyright>Copyright (c) 2026 Rulewright Contributors</Copyright>
-    <NeutralLanguage>en</NeutralLanguage>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <AnalysisLevel>latest</AnalysisLevel>
   </PropertyGroup>
 
-  <PropertyGroup>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageTags>rules-engine;business-rules;dotnet;netstandard2.0;json</PackageTags>
-    <RepositoryType>git</RepositoryType>
-    <RepositoryUrl>https://github.com/albahadly/Rulewright.git</RepositoryUrl>
-    <PackageProjectUrl>https://github.com/albahadly/Rulewright</PackageProjectUrl>
-    <PackageReadmeFile Condition="Exists('$(MSBuildProjectDirectory)/README.md')">README.md</PackageReadmeFile>
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
 </Project>

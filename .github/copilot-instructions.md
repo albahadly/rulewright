@@ -5,8 +5,8 @@ Rulewright is a **JSON-driven business rule engine for .NET**. The workflow is a
 **compile** it to expression-tree delegates (or **interpret** it for dictionary facts) →
 **evaluate** facts against it, producing fired rules + merged outputs + an optional trace.
 
-It multi-targets `netstandard2.0` **and** `net8.0`, so the same packages run on .NET Framework
-4.8 through modern .NET. Rules are **pure data** — a closed, validatable operator vocabulary,
+It multi-targets `net48;netstandard2.0;net8.0;net10.0` (set once in `src/Directory.Build.props`),
+so the same packages run on .NET Framework 4.8 through modern .NET. Rules are **pure data** — a closed, validatable operator vocabulary,
 never embedded code — so a UI can safely generate them and a reviewer can safely diff them.
 
 When you touch evaluation semantics, the JSON schema, or the operator vocabulary, prefer reading

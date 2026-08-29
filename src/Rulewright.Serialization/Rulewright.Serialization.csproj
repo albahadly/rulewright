@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <Description>Rulewright JSON-to-domain mapping, structural schema validation with JSON pointer errors, and canonical rule hashing. JSON parsing is abstracted behind IRuleJsonReader; no JSON library dependency.</Description>
   </PropertyGroup>
 

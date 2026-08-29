@@ -4,7 +4,7 @@ A high-performance, JSON-driven business rule engine for .NET. Rules are plain J
 documents; evaluation is compiled expression trees — parse once, compile once, execute
 millions of times.
 
-[![CI](https://github.com/rulewright/rulewright/actions/workflows/ci.yml/badge.svg)](https://github.com/rulewright/rulewright/actions/workflows/ci.yml)
+[![CI](https://github.com/albahadly/Rulewright/actions/workflows/ci.yml/badge.svg)](https://github.com/albahadly/Rulewright/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ```json
@@ -60,9 +60,9 @@ foreach (FiredRule fired in result.FiredRules)
   delegates are cached by a **content hash** of the rule (not its id), so editing a
   rule's body always invalidates the cache, while reformatting or moving canvas nodes
   never does.
-- **One package, .NET Framework 4.8 through .NET 8+.** The core targets
-  `netstandard2.0` with **zero dependencies**; a `net8.0` build lights up newer BCL
-  paths. A .NET Framework 4.8 sample project builds and runs in CI — the compatibility
+- **One package, .NET Framework 4.8 through .NET 10.** Every library multi-targets
+  `net48;netstandard2.0;net8.0;net10.0`, and the core has **zero dependencies** on all
+  four. A .NET Framework 4.8 sample project builds and runs in CI — the compatibility
   claim is executed, not asserted.
 - **Bring your own JSON library.** Parsing is abstracted behind `IRuleJsonReader`
   with adapter packages for **System.Text.Json** and **Newtonsoft.Json** (parity-tested
@@ -100,11 +100,31 @@ fairness check that all three flag the same matches).
 ## Install
 
 ```
-dotnet add package Rulewright.Execution
-dotnet add package Rulewright.Json.SystemText
+dotnet add package Rulewright
 ```
 
-*(Not yet published to NuGet — build from source for now; see below.)*
+That is the metapackage: the domain model, JSON parsing and schema validation, the
+evaluation engine, the System.Text.Json adapter, and the built-in `custom` functions.
+
+Prefer to pick pieces? Reference `Rulewright.Execution` plus one JSON adapter:
+
+```
+dotnet add package Rulewright.Execution
+dotnet add package Rulewright.Json.NewtonsoftJson    # or Rulewright.Json.SystemText
+```
+
+| Package | What it is |
+|---|---|
+| `Rulewright` | Everything below except the Newtonsoft adapter. Start here. |
+| `Rulewright.Execution` | The compiler, interpreter, delegate cache, and engine API. |
+| `Rulewright.Serialization` | Parsing, validation, and canonical hashing — no evaluation, no JSON library. |
+| `Rulewright.Core` | The domain model alone. Zero dependencies. |
+| `Rulewright.Json.SystemText` | `IRuleJsonReader` over System.Text.Json, plus JSON fact helpers. |
+| `Rulewright.Json.NewtonsoftJson` | The same, over Newtonsoft.Json. |
+| `Rulewright.Extensions.Functions` | The built-in `custom`-operator predicate catalog. |
+
+All packages target .NET Framework 4.8, .NET Standard 2.0, .NET 8.0 and .NET 10.0, are
+strong-named, and ship symbols (`.snupkg`) with Source Link.
 
 ## Concepts
 
@@ -359,8 +379,8 @@ illustrative and machine-specific; re-run the suite on your hardware.)*
 ## Building from source
 
 ```
-git clone https://github.com/rulewright/rulewright.git
-cd rulewright
+git clone https://github.com/albahadly/Rulewright.git
+cd Rulewright
 dotnet build Rulewright.slnx
 dotnet test  Rulewright.slnx            # runs on net8.0 and net48 (Windows)
 dotnet run --project samples/Rulewright.Sample.ConsoleApp

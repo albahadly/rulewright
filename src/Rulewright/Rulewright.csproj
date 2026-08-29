@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>The Rulewright rule engine — everything you need in one package: the core domain model, JSON parsing and schema validation, the expression-tree evaluation engine, the System.Text.Json adapter, and the built-in custom functions. Rules are plain JSON; evaluation is compiled expression trees. Install this unless you want to pick pieces individually.</Description>
+    <!-- A metapackage: it carries no code of its own, only the reference set. -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Rulewright.Core\Rulewright.Core.csproj" />
+    <ProjectReference Include="..\Rulewright.Serialization\Rulewright.Serialization.csproj" />
+    <ProjectReference Include="..\Rulewright.Execution\Rulewright.Execution.csproj" />
+    <ProjectReference Include="..\Rulewright.Json.SystemText\Rulewright.Json.SystemText.csproj" />
+    <ProjectReference Include="..\Rulewright.Extensions.Functions\Rulewright.Extensions.Functions.csproj" />
+  </ItemGroup>
+
+</Project>
