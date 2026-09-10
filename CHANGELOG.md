@@ -89,4 +89,4 @@ in a minor version; each one is called out below.
 Initial public packages: the core domain model, JSON parsing and schema validation, the
 expression-tree evaluation engine, System.Text.Json and Newtonsoft.Json adapters, the built-in
 `custom` predicate catalog, and the `Rulewright` metapackage. See the
-[releases page](https://github.com/albahadly/Rulewright/releases).
+[releases page](https://github.com/albahadly/rulewright/releases).

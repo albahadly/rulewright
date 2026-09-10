@@ -13,7 +13,7 @@ support branches yet.
 ## Reporting a vulnerability
 
 Report privately, not in a public issue: open a
-[security advisory](https://github.com/albahadly/Rulewright/security/advisories/new) on the
+[security advisory](https://github.com/albahadly/rulewright/security/advisories/new) on the
 repository.
 
 Please include the affected version and target framework, a rule document and fact that reproduce

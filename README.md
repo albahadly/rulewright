@@ -4,7 +4,7 @@ A high-performance, JSON-driven business rule engine for .NET. Rules are plain J
 documents; evaluation is compiled expression trees — parse once, compile once, execute
 millions of times.
 
-[![CI](https://github.com/albahadly/Rulewright/actions/workflows/ci.yml/badge.svg)](https://github.com/albahadly/Rulewright/actions/workflows/ci.yml)
+[![CI](https://github.com/albahadly/rulewright/actions/workflows/ci.yml/badge.svg)](https://github.com/albahadly/rulewright/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ```json
@@ -391,7 +391,7 @@ illustrative and machine-specific; re-run the suite on your hardware.)*
 ## Building from source
 
 ```
-git clone https://github.com/albahadly/Rulewright.git
+git clone https://github.com/albahadly/rulewright.git
 cd Rulewright
 dotnet build Rulewright.slnx
 dotnet test  Rulewright.slnx            # runs on net8.0 and net48 (Windows)

@@ -17,11 +17,11 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <NeutralLanguage>en</NeutralLanguage>
     <VersionPrefix>0.2.0</VersionPrefix>
-    <RepositoryUrl>https://github.com/albahadly/Rulewright</RepositoryUrl>
+    <RepositoryUrl>https://github.com/albahadly/rulewright</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageProjectUrl>https://github.com/albahadly/Rulewright</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/albahadly/rulewright</PackageProjectUrl>
     <PackageTags>rules-engine;business-rules;json;expression-trees;decision-table;netstandard2.0</PackageTags>
-    <PackageReleaseNotes>See https://github.com/albahadly/Rulewright/releases for release notes.</PackageReleaseNotes>
+    <PackageReleaseNotes>See https://github.com/albahadly/rulewright/releases for release notes.</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <IncludeSymbols>true</IncludeSymbols>
