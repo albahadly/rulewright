@@ -32,7 +32,7 @@ Rulewright.Json.NewtonsoftJson ┤ (adapters: JSON text → neutral DOM)
    validation (JSON-pointer errors) → immutable `RuleSet`.
 2. **Prepare once** — per rule: content hash, pre-sorted evaluation order
    (priority desc, document order for ties), prematerialized action outputs,
-   pre-order condition-node index (for tracing).
+   pre-order condition-node layout (for tracing).
 3. **Compile once per fact type** — first `Evaluate<TFact>` compiles the rule into
    two delegates (see *Tracing*) and caches them.
 4. **Execute many** — subsequent evaluations are direct delegate invocations.
@@ -166,10 +166,20 @@ for free. Each row becomes one rule (priority descending by row order):
   row's `then` cell, parsed as a value expression (so cells can be computed). A null cell
   writes nothing for that output.
 - **Hit policy.** `collect` (default) leaves rows independent — all matches apply in order.
-  `first` bakes exclusivity into the conditions: row *n* is `AND(ownₙ, ¬own₀, …, ¬ownₙ₋₁)`, so
-  the rows are mutually exclusive and exactly the first match fires under normal evaluation —
-  no new engine flag. Structural validation (cell counts, operator/type vocabularies, cell
-  shapes) happens in `RuleSetValidator` with the same JSON-pointer error surface as rules.
+  `first` sets `RuleSet.StopAfterFirstMatch` on the expanded set, which the engine ORs with the
+  caller's `EvaluationOptions.StopOnFirstMatch`; rows already carry descending priorities, so
+  stopping after the first hit fires exactly the first matching row. Each row's condition stays
+  exactly what its cells say.
+
+  This replaced an encoding that baked exclusivity into the conditions — row *n* as
+  `AND(ownₙ, ¬own₀, …, ¬ownₙ₋₁)`. That needed no engine flag, but it was quadratic: a 500-row
+  table reached roughly 250,000 condition nodes and about seven seconds of compile time, and
+  every row's condition read as a wall of negations. One flag on the set buys O(rows).
+
+  Structural validation (cell counts, operator/type vocabularies, cell shapes, In-cell members,
+  regex patterns) happens in `RuleSetValidator`, sharing its helpers with the condition-leaf
+  path so the two authoring surfaces cannot drift, and with the same JSON-pointer error surface
+  as rules.
 
 ## Schema discovery
 

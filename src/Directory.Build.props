@@ -16,7 +16,7 @@
     <Copyright>Copyright (c) 2026 Rulewright Contributors</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <NeutralLanguage>en</NeutralLanguage>
-    <VersionPrefix>0.1.1</VersionPrefix>
+    <VersionPrefix>0.2.0</VersionPrefix>
     <RepositoryUrl>https://github.com/albahadly/Rulewright</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/albahadly/Rulewright</PackageProjectUrl>

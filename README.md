@@ -126,6 +126,10 @@ dotnet add package Rulewright.Json.NewtonsoftJson    # or Rulewright.Json.System
 All packages target .NET Framework 4.8, .NET Standard 2.0, .NET 8.0 and .NET 10.0, are
 strong-named, and ship symbols (`.snupkg`) with Source Link.
 
+> **New here?** [usage.md](usage.md) is a task-oriented guide — first rule, fact shapes, actions,
+> computed values, decision tables, custom functions, validation, tracing, and hosting — with
+> runnable snippets throughout. This README is the reference.
+
 ## Concepts
 
 | Term | Meaning |
@@ -209,7 +213,9 @@ operator routine, so a `field` leaf and an equivalent `expression` leaf agree. A
 
 A null field value (or null anywhere along the path) makes every operator return
 `false`, except: `IsNull` → `true`, `NotEquals` (non-null comparand) → `true`,
-`NotIn` → `true`, and `Equals` with a `null` comparand → `true`.
+`NotIn` → `true`, and `Equals` with a `null` comparand → `true`. A null *inside* an
+`In`/`NotIn` set contributes nothing on either path — null is a field's absence, not a
+member — and the schema rejects one outright.
 
 ### Actions — constant and computed values
 
@@ -318,8 +324,9 @@ output cell skips that output for the row. Two hit policies:
 
 - **`collect`** (default) — every matching row applies its actions in row order (pairs with
   `addToOutput` for scoring tables).
-- **`first`** — only the first matching row applies. Encoded by ANDing each row with the
-  negation of every earlier row's condition, so exactly one row fires under normal evaluation.
+- **`first`** — only the first matching row applies. Rows already carry descending priorities, so
+  the table sets `RuleSet.StopAfterFirstMatch` and evaluation stops after the first hit; each row's
+  condition stays exactly what its cells say.
 
 ### Discovering the vocabulary
 
