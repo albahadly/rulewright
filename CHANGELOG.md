@@ -5,7 +5,10 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0, breaking changes may land
 in a minor version; each one is called out below.
 
-## [Unreleased]
+## [0.3.0]
+
+Additive: nothing that loaded under 0.2.0 changes meaning. Rules can now reason about collection
+fields, which `In`/`NotIn` never could.
 
 ### Added
 
