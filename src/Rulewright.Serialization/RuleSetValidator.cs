@@ -294,16 +294,7 @@ public static class RuleSetValidator
                 }
                 else
                 {
-                    for (int i = 0; i < value.Items.Count; i++)
-                    {
-                        RuleJsonValueKind itemKind = value.Items[i].Kind;
-                        if (itemKind is RuleJsonValueKind.Object or RuleJsonValueKind.Array or RuleJsonValueKind.Null)
-                        {
-                            errors.Add(new RuleValidationError(
-                                path + "/value/" + i.ToString(CultureInfo.InvariantCulture),
-                                "In/NotIn values must be scalars (string, number, or boolean)."));
-                        }
-                    }
+                    ValidateSetItems(value, path + "/value", errors);
                 }
 
                 break;
@@ -329,14 +320,7 @@ public static class RuleSetValidator
                 }
                 else
                 {
-                    try
-                    {
-                        _ = new Regex(value.GetString());
-                    }
-                    catch (ArgumentException ex)
-                    {
-                        errors.Add(new RuleValidationError(path + "/value", $"Invalid regular expression: {ex.Message}"));
-                    }
+                    ValidateRegexPattern(value.GetString(), path + "/value", errors);
                 }
 
                 break;
@@ -366,6 +350,43 @@ public static class RuleSetValidator
                 }
 
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Checks the members of an In/NotIn set. Only scalars have a CLR mapping the compiled path's
+    /// typed set and the interpreter's value comparison agree on, so an object, a nested array, or a
+    /// null is rejected at its own pointer. Shared by condition leaves and decision-table cells so
+    /// the two authoring surfaces cannot drift apart.
+    /// </summary>
+    private static void ValidateSetItems(RuleJsonValue value, string path, List<RuleValidationError> errors)
+    {
+        for (int i = 0; i < value.Items.Count; i++)
+        {
+            RuleJsonValueKind itemKind = value.Items[i].Kind;
+            if (itemKind is RuleJsonValueKind.Object or RuleJsonValueKind.Array or RuleJsonValueKind.Null)
+            {
+                errors.Add(new RuleValidationError(
+                    path + "/" + i.ToString(CultureInfo.InvariantCulture),
+                    "In/NotIn values must be scalars (string, number, or boolean)."));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Compiles a pattern to prove it is a well-formed regular expression, so a bad one is a
+    /// validation error with a pointer rather than a compilation failure at load time. Shared by
+    /// condition leaves and decision-table cells.
+    /// </summary>
+    private static void ValidateRegexPattern(string pattern, string path, List<RuleValidationError> errors)
+    {
+        try
+        {
+            _ = new Regex(pattern);
+        }
+        catch (ArgumentException ex)
+        {
+            errors.Add(new RuleValidationError(path, $"Invalid regular expression: {ex.Message}"));
         }
     }
 
@@ -746,6 +767,10 @@ public static class RuleSetValidator
                 {
                     errors.Add(new RuleValidationError(path, "This cell must be a non-empty array (its column uses In/NotIn)."));
                 }
+                else
+                {
+                    ValidateSetItems(cell, path, errors);
+                }
 
                 break;
 
@@ -756,6 +781,10 @@ public static class RuleSetValidator
                 if (cell.Kind != RuleJsonValueKind.String)
                 {
                     errors.Add(new RuleValidationError(path, "This cell must be a string (its column uses a string operator)."));
+                }
+                else if (op == Core.ConditionOperator.MatchesRegex)
+                {
+                    ValidateRegexPattern(cell.GetString(), path, errors);
                 }
 
                 break;

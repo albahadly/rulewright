@@ -186,4 +186,45 @@ public class DecisionTableTests
             ""rows"": [ { ""when"": [1], ""then"": [5] } ] } }");
         Assert.Equal(RuleAction.AddToOutputType, ruleSet.Rules[0].Actions[0].Type);
     }
+
+    /// <summary>
+    /// An In/NotIn cell holds the same operand shapes a leaf's In/NotIn array does - scalars only.
+    /// A null or nested array has no CLR mapping the two execution paths agree on, so it is
+    /// rejected at the same pointer depth the leaf validator uses.
+    /// </summary>
+    [Fact]
+    public void InColumnCellItemsMustBeScalars_IsReported()
+    {
+        RuleSetValidationResult nullItem = Validate(@"{ ""decisionTable"": {
+            ""inputs"": [ { ""field"": ""A"", ""operator"": ""In"" } ],
+            ""outputs"": [ { ""target"": ""D"" } ],
+            ""rows"": [ { ""when"": [ [null, ""gold""] ], ""then"": [1] } ] } }");
+        Assert.Contains(nullItem.Errors, e => e.Path == "/decisionTable/rows/0/when/0/0");
+
+        RuleSetValidationResult nestedArray = Validate(@"{ ""decisionTable"": {
+            ""inputs"": [ { ""field"": ""A"", ""operator"": ""NotIn"" } ],
+            ""outputs"": [ { ""target"": ""D"" } ],
+            ""rows"": [ { ""when"": [ [ [""gold""] ] ], ""then"": [1] } ] } }");
+        Assert.Contains(nestedArray.Errors, e => e.Path == "/decisionTable/rows/0/when/0/0");
+
+        RuleSetValidationResult scalars = Validate(@"{ ""decisionTable"": {
+            ""inputs"": [ { ""field"": ""A"", ""operator"": ""In"" } ],
+            ""outputs"": [ { ""target"": ""D"" } ],
+            ""rows"": [ { ""when"": [ [""gold"", 1, true] ], ""then"": [1] } ] } }");
+        Assert.True(scalars.IsValid);
+    }
+
+    /// <summary>
+    /// A cell's regular expression is compiled during validation, exactly as a leaf's is, so a bad
+    /// pattern is an error with a pointer rather than a compilation failure at load time.
+    /// </summary>
+    [Fact]
+    public void MatchesRegexCellWithBadPattern_IsReported()
+    {
+        RuleSetValidationResult result = Validate(@"{ ""decisionTable"": {
+            ""inputs"": [ { ""field"": ""A"", ""operator"": ""MatchesRegex"" } ],
+            ""outputs"": [ { ""target"": ""D"" } ],
+            ""rows"": [ { ""when"": [""(""], ""then"": [1] } ] } }");
+        Assert.Contains(result.Errors, e => e.Path == "/decisionTable/rows/0/when/0");
+    }
 }

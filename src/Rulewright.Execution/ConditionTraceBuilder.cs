@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Rulewright.Core;
 
 namespace Rulewright.Execution;
@@ -12,19 +11,22 @@ internal static class ConditionTraceBuilder
 {
     internal static ConditionTraceNode Build(
         ConditionNode node,
-        Dictionary<ConditionNode, int> nodeIndex,
+        int index,
+        int[] layout,
         bool?[] results)
     {
         ConditionTraceNode[]? children = null;
         if (node is ConditionGroup group)
         {
             children = new ConditionTraceNode[group.Children.Count];
+            int childIndex = index + 1;
             for (int i = 0; i < group.Children.Count; i++)
             {
-                children[i] = Build(group.Children[i], nodeIndex, results);
+                children[i] = Build(group.Children[i], childIndex, layout, results);
+                childIndex += layout[childIndex];
             }
         }
 
-        return new ConditionTraceNode(ConditionDescriber.Describe(node), results[nodeIndex[node]], children);
+        return new ConditionTraceNode(ConditionDescriber.Describe(node), results[index], children);
     }
 }

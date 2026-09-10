@@ -220,7 +220,10 @@ Each rule compiles **two** delegates from the same expression builder:
 
 Nodes are indexed by a pre-order walk (`ConditionNodeIndexer`) shared by the compiler,
 the interpreter, and `ConditionTraceBuilder`, which re-hydrates the `bool?[]` into a
-`ConditionTraceNode` tree after evaluation. Slots left `null` mean "short-circuited,
+`ConditionTraceNode` tree after evaluation. A node's slot is its **position**, not its
+identity: the indexer records each subtree's size so every walker derives the same slot
+from where a node sits, which is what lets one immutable `ConditionNode` instance be
+reused at several positions in a tree and still get a slot per occurrence. Slots left `null` mean "short-circuited,
 never evaluated" and surface as `Passed == null`. `EvaluationOptions.EnableTrace`
 selects which delegate runs — tracing off costs nothing beyond an untraced call.
 

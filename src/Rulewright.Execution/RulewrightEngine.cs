@@ -116,7 +116,7 @@ public sealed class RulewrightEngine
             (IReadOnlyDictionary<string, object?> Outputs, bool HasComplex) thenPlan = BuildOutputPlan(rule, rule.Actions);
             (IReadOnlyDictionary<string, object?> Outputs, bool HasComplex) elsePlan = BuildOutputPlan(rule, rule.ElseActions);
 
-            Dictionary<ConditionNode, int> nodeIndex = ConditionNodeIndexer.BuildIndexMap(rule.Condition, out int nodeCount);
+            int[] nodeLayout = ConditionNodeIndexer.BuildLayout(rule.Condition);
             entries.Add(new RuleEntry(
                 rule,
                 RuleHasher.ComputeHash(rule),
@@ -124,8 +124,7 @@ public sealed class RulewrightEngine
                 thenPlan.HasComplex,
                 elsePlan.Outputs,
                 elsePlan.HasComplex,
-                nodeIndex,
-                nodeCount));
+                nodeLayout));
         }
 
         return new LoadedRuleSet(ruleSet, entries.ToArray());
@@ -231,7 +230,7 @@ public sealed class RulewrightEngine
                 options,
                 CompilationMode.Interpreted,
                 (entry, results) => RuleInterpreter.Evaluate(
-                    entry.Rule.Condition, boxedFact, _functions, _regexTimeout, results, entry.NodeIndex),
+                    entry.Rule.Condition, 0, boxedFact, _functions, _regexTimeout, results, entry.NodeLayout),
                 (entry, isElse, running) => ApplyInterpretedOutputs(entry, isElse, boxedFact, running));
         }
 
@@ -334,9 +333,9 @@ public sealed class RulewrightEngine
             ConditionTraceNode? conditionTrace = null;
             if (traceRules is not null)
             {
-                var results = new bool?[entry.NodeCount];
+                var results = new bool?[entry.NodeLayout.Length];
                 matched = evaluateRule(entry, results);
-                conditionTrace = ConditionTraceBuilder.Build(entry.Rule.Condition, entry.NodeIndex, results);
+                conditionTrace = ConditionTraceBuilder.Build(entry.Rule.Condition, 0, entry.NodeLayout, results);
             }
             else
             {
@@ -383,7 +382,7 @@ public sealed class RulewrightEngine
 
         return (CompiledRule<TFact>)_compiledRules.GetOrAdd(
             key,
-            _ => RuleExpressionCompiler.Compile<TFact>(entry.Rule, _functions, _regexTimeout, entry.NodeIndex));
+            _ => RuleExpressionCompiler.Compile<TFact>(entry.Rule, _functions, _regexTimeout, entry.NodeLayout));
     }
 
     private void ValidateFunctions(Rule rule, ConditionNode node)

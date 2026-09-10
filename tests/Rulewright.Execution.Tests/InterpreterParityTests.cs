@@ -114,4 +114,73 @@ public class InterpreterParityTests
         Assert.False(Matches("{\"field\":\"Code\",\"operator\":\"Equals\",\"value\":18}", fact));
         Assert.False(Matches("{\"field\":\"Code\",\"operator\":\"GreaterThan\",\"value\":1}", fact));
     }
+
+    // --- Differential parity: the same rule through both paths must agree ---
+
+    /// <summary>
+    /// Runs one condition against a typed fact (compiled delegates) and an equivalent dictionary
+    /// fact (interpreter) and asserts they agree. Hand-written expectations can only catch a
+    /// divergence someone anticipated; this catches any divergence at all.
+    /// </summary>
+    private static void AssertPathsAgree<TFact>(ConditionNode condition, TFact typedFact, Dictionary<string, object?> dictionaryFact)
+    {
+        var ruleSet = new RuleSet(new[] { new Rule("parity", condition) });
+        LoadedRuleSet loaded = Engine.LoadRuleSet(ruleSet);
+
+        RuleEvaluationResult compiled = Engine.Evaluate(loaded, typedFact);
+        RuleEvaluationResult interpreted = Engine.Evaluate(loaded, dictionaryFact);
+
+        Assert.Equal(CompilationMode.Compiled, compiled.CompilationMode);
+        Assert.Equal(CompilationMode.Interpreted, interpreted.CompilationMode);
+        Assert.Equal(compiled.FiredRules.Count, interpreted.FiredRules.Count);
+    }
+
+    /// <summary>
+    /// A null inside an In/NotIn set contributes nothing on either path. The JSON schema forbids
+    /// it outright, but a hand-built <see cref="ConditionLeaf"/> can still carry one, and the two
+    /// paths must not answer differently — a null field is not "in" any set, so In is false and
+    /// NotIn is true, exactly as the documented null semantics say.
+    /// </summary>
+    [Fact]
+    public void NullInsideAnInSet_ContributesNothingOnBothPaths()
+    {
+        var typed = new OrderFact { Customer = new Customer { Email = null } };
+        var dictionary = new Dictionary<string, object?>
+        {
+            ["Customer"] = new Dictionary<string, object?> { ["Email"] = null },
+        };
+
+        var inSet = new ConditionLeaf("Customer.Email", ConditionOperator.In, new object?[] { null, "a@b.c" });
+        var notInSet = new ConditionLeaf("Customer.Email", ConditionOperator.NotIn, new object?[] { null, "a@b.c" });
+
+        AssertPathsAgree(inSet, typed, dictionary);
+        AssertPathsAgree(notInSet, typed, dictionary);
+
+        Assert.False(Fires(inSet, typed));
+        Assert.False(Fires(inSet, dictionary));
+        Assert.True(Fires(notInSet, typed));
+        Assert.True(Fires(notInSet, dictionary));
+    }
+
+    /// <summary>A non-null value still matches around the null hole in the set, on both paths.</summary>
+    [Fact]
+    public void NullInsideAnInSet_DoesNotHideTheOtherMembers()
+    {
+        var typed = new OrderFact { Customer = new Customer { Email = "a@b.c" } };
+        var dictionary = new Dictionary<string, object?>
+        {
+            ["Customer"] = new Dictionary<string, object?> { ["Email"] = "a@b.c" },
+        };
+
+        var inSet = new ConditionLeaf("Customer.Email", ConditionOperator.In, new object?[] { null, "a@b.c" });
+        AssertPathsAgree(inSet, typed, dictionary);
+        Assert.True(Fires(inSet, typed));
+        Assert.True(Fires(inSet, dictionary));
+    }
+
+    private static bool Fires<TFact>(ConditionNode condition, TFact fact)
+    {
+        var ruleSet = new RuleSet(new[] { new Rule("parity", condition) });
+        return Engine.Evaluate(Engine.LoadRuleSet(ruleSet), fact).FiredRules.Count == 1;
+    }
 }

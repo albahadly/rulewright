@@ -160,6 +160,11 @@ The catalog covers what the closed operator set deliberately doesn't: `IsNullOrE
 injectable clock). Each is **total** — an unexpected value type yields `false`, never an
 exception. Write your own with `new NamedRuleFunction("MyCheck", (field, value) => …)`.
 
+`IsInPast`/`IsInFuture` compare **instants**: a `DateTimeOffset` and a `Local` `DateTime` are
+resolved to UTC before the comparison, and a `DateTimeKind.Unspecified` value is read as UTC so
+the same rule and fact answer the same way on every machine. `IsWeekend`/`IsWeekday` stay
+wall-clock — the Saturday where it happened, not where UTC puts it.
+
 A `custom` leaf's `value` is whatever its function expects — a scalar, a string, or an array
 such as `IsBetweenInclusive`'s `[min, max]`:
 

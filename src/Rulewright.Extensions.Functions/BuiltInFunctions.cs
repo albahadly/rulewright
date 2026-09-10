@@ -97,9 +97,11 @@ public static class BuiltInFunctions
                 FunctionValues.TryToDateTime(field, out DateTime dt)
                 && dt.DayOfWeek != DayOfWeek.Saturday && dt.DayOfWeek != DayOfWeek.Sunday,
                 "Field date falls on a weekday.", RuleFunctionValueKind.None),
-            new NamedRuleFunction("IsInPast", (field, value) => FunctionValues.TryToDateTime(field, out DateTime dt) && dt < now(),
+            // Relativity compares instants, not wall clocks: both the field and the clock are
+            // resolved to UTC first, so an offset or a Local Kind cannot skew the answer.
+            new NamedRuleFunction("IsInPast", (field, value) => FunctionValues.TryToInstant(field, out DateTime dt) && dt < FunctionValues.ToUtc(now()),
                 "Field date is before now.", RuleFunctionValueKind.None),
-            new NamedRuleFunction("IsInFuture", (field, value) => FunctionValues.TryToDateTime(field, out DateTime dt) && dt > now(),
+            new NamedRuleFunction("IsInFuture", (field, value) => FunctionValues.TryToInstant(field, out DateTime dt) && dt > FunctionValues.ToUtc(now()),
                 "Field date is after now.", RuleFunctionValueKind.None),
         };
 

@@ -153,4 +153,68 @@ public class BuiltInFunctionTests
             ["Customer"] = new Dictionary<string, object?> { ["Age"] = 70L },
         }));
     }
+
+    /// <summary>
+    /// Date relativity is about an instant, not a wall clock. A DateTimeOffset carries its own
+    /// offset and a DateTime carries a Kind; both must be resolved to UTC before comparing against
+    /// the clock, or the answer is wrong by the size of the offset.
+    /// </summary>
+    [Fact]
+    public void InPast_And_InFuture_ResolveOffsetsAndKindsToUtc()
+    {
+        var clockNow = new DateTime(2021, 6, 15, 12, 0, 0, DateTimeKind.Utc);
+        var functions = BuiltInFunctions.Create(() => clockNow);
+        IRuleFunction inPast = functions.Single(f => f.Name == "IsInPast");
+        IRuleFunction inFuture = functions.Single(f => f.Name == "IsInFuture");
+
+        // 23:00 at +12:00 is 11:00 UTC - one hour before the clock, however the wall clock reads.
+        var pastAtPlusTwelve = new DateTimeOffset(2021, 6, 15, 23, 0, 0, TimeSpan.FromHours(12));
+        Assert.True(inPast.Evaluate(pastAtPlusTwelve, null));
+        Assert.False(inFuture.Evaluate(pastAtPlusTwelve, null));
+
+        // 01:00 at -12:00 is 13:00 UTC - one hour after the clock.
+        var futureAtMinusTwelve = new DateTimeOffset(2021, 6, 15, 1, 0, 0, TimeSpan.FromHours(-12));
+        Assert.True(inFuture.Evaluate(futureAtMinusTwelve, null));
+        Assert.False(inPast.Evaluate(futureAtMinusTwelve, null));
+
+        // An offset-bearing string constant resolves the same way.
+        Assert.True(inPast.Evaluate("2021-06-15T23:00:00+12:00", null));
+        Assert.True(inFuture.Evaluate("2021-06-15T01:00:00-12:00", null));
+
+        // A Local DateTime is an instant too: five hours before the clock is in the past in every
+        // time zone, not only in UTC.
+        DateTime localFiveHoursBefore = new DateTime(clockNow.Ticks, DateTimeKind.Utc).AddHours(-5).ToLocalTime();
+        Assert.Equal(DateTimeKind.Local, localFiveHoursBefore.Kind);
+        Assert.True(inPast.Evaluate(localFiveHoursBefore, null));
+        Assert.False(inFuture.Evaluate(localFiveHoursBefore, null));
+    }
+
+    /// <summary>
+    /// A clock that reports local time must not shift the comparison - the engine normalizes both
+    /// sides, so the same fact answers the same way whatever Kind the clock hands back.
+    /// </summary>
+    [Fact]
+    public void InPast_NormalizesTheClockItself()
+    {
+        var instant = new DateTime(2021, 6, 15, 12, 0, 0, DateTimeKind.Utc);
+        IRuleFunction utcClock = BuiltInFunctions.Create(() => instant).Single(f => f.Name == "IsInPast");
+        IRuleFunction localClock = BuiltInFunctions.Create(() => instant.ToLocalTime()).Single(f => f.Name == "IsInPast");
+
+        var subject = new DateTimeOffset(2021, 6, 15, 11, 0, 0, TimeSpan.Zero);
+        Assert.Equal(utcClock.Evaluate(subject, null), localClock.Evaluate(subject, null));
+        Assert.True(utcClock.Evaluate(subject, null));
+    }
+
+    /// <summary>
+    /// The calendar predicates stay wall-clock: "placed on a Saturday" means the Saturday where it
+    /// happened, so a DateTimeOffset keeps its own local date rather than being shifted to UTC.
+    /// </summary>
+    [Fact]
+    public void Weekend_UsesTheWallClockDate_NotUtc()
+    {
+        // Saturday 01:00 at +12:00 is still Friday 13:00 UTC.
+        var saturdayAtPlusTwelve = new DateTimeOffset(2021, 6, 19, 1, 0, 0, TimeSpan.FromHours(12));
+        Assert.True(Fn("IsWeekend").Evaluate(saturdayAtPlusTwelve, null));
+        Assert.False(Fn("IsWeekday").Evaluate(saturdayAtPlusTwelve, null));
+    }
 }

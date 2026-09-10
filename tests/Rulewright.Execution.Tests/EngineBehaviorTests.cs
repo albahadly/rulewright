@@ -154,4 +154,51 @@ public class EngineBehaviorTests
         Assert.Equal(10L, result.FiredRules[0].Outputs["Discount"]);
         Assert.Equal(5L, result.FiredRules[1].Outputs["Discount"]);
     }
+
+    /// <summary>
+    /// The domain model is immutable, so sharing one condition instance in several places is a
+    /// natural thing to write. Node bookkeeping is positional, not identity-keyed, so a reused
+    /// instance evaluates and traces once per position instead of colliding.
+    /// </summary>
+    [Fact]
+    public void SharedConditionInstance_EvaluatesAndTracesPerPosition()
+    {
+        var shared = new ConditionLeaf("Customer.Age", ConditionOperator.GreaterThan, 18L);
+        var group = new ConditionGroup(LogicalOperator.And, new ConditionNode[] { shared, shared });
+        var ruleSet = new RuleSet(new[]
+        {
+            new Rule("shared", group, new[] { new RuleAction("setOutput", "Ok", true) }),
+        });
+
+        LoadedRuleSet loaded = Engine.LoadRuleSet(ruleSet);
+        RuleEvaluationResult result = Engine.Evaluate(loaded, DefaultFact(), new EvaluationOptions { EnableTrace = true });
+
+        Assert.Single(result.FiredRules);
+        Assert.Equal(true, result.Outputs["Ok"]);
+
+        ConditionTraceNode root = result.Trace!.Rules.Single().Condition!;
+        Assert.Equal(2, root.Children!.Count);
+        Assert.All(root.Children, child => Assert.True(child.Passed));
+    }
+
+    /// <summary>The same, on the interpreter - a shared instance must not confuse its trace slots.</summary>
+    [Fact]
+    public void SharedConditionInstance_TracesPerPosition_Interpreted()
+    {
+        var passes = new ConditionLeaf("Age", ConditionOperator.GreaterThan, 18L);
+        var fails = new ConditionLeaf("Age", ConditionOperator.GreaterThan, 999L);
+        var group = new ConditionGroup(LogicalOperator.Or, new ConditionNode[] { fails, passes, fails });
+        var ruleSet = new RuleSet(new[] { new Rule("shared", group) });
+
+        LoadedRuleSet loaded = Engine.LoadRuleSet(ruleSet);
+        var fact = new Dictionary<string, object?> { ["Age"] = 21L };
+        RuleEvaluationResult result = Engine.Evaluate(loaded, fact, new EvaluationOptions { EnableTrace = true });
+
+        ConditionTraceNode root = result.Trace!.Rules.Single().Condition!;
+        Assert.Equal(3, root.Children!.Count);
+        Assert.False(root.Children[0].Passed);
+        Assert.True(root.Children[1].Passed);
+        // OR short-circuits after the second child, so the third was never reached.
+        Assert.Null(root.Children[2].Passed);
+    }
 }

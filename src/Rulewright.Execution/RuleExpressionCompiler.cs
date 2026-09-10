@@ -52,17 +52,17 @@ internal static class RuleExpressionCompiler
         Rule rule,
         IReadOnlyDictionary<string, IRuleFunction> functions,
         TimeSpan regexTimeout,
-        Dictionary<ConditionNode, int> nodeIndex)
+        int[] nodeLayout)
     {
         ParameterExpression fact = Expression.Parameter(typeof(TFact), "fact");
         ParameterExpression results = Expression.Parameter(typeof(bool?[]), "results");
 
-        var fastContext = new Context(rule, functions, regexTimeout, null, null);
-        Expression fastBody = BuildNode(rule.Condition, fact, fastContext);
+        var fastContext = new Context(rule, functions, regexTimeout, null, nodeLayout);
+        Expression fastBody = BuildNode(rule.Condition, 0, fact, fastContext);
         Func<TFact, bool> predicate = Expression.Lambda<Func<TFact, bool>>(fastBody, fact).Compile();
 
-        var tracedContext = new Context(rule, functions, regexTimeout, results, nodeIndex);
-        Expression tracedBody = BuildNode(rule.Condition, fact, tracedContext);
+        var tracedContext = new Context(rule, functions, regexTimeout, results, nodeLayout);
+        Expression tracedBody = BuildNode(rule.Condition, 0, fact, tracedContext);
         Func<TFact, bool?[], bool> tracedPredicate =
             Expression.Lambda<Func<TFact, bool?[], bool>>(tracedBody, fact, results).Compile();
 
@@ -266,13 +266,13 @@ internal static class RuleExpressionCompiler
             IReadOnlyDictionary<string, IRuleFunction> functions,
             TimeSpan regexTimeout,
             ParameterExpression? results,
-            Dictionary<ConditionNode, int>? nodeIndex)
+            int[] nodeLayout)
         {
             Rule = rule;
             Functions = functions;
             RegexTimeout = regexTimeout;
             Results = results;
-            NodeIndex = nodeIndex;
+            NodeLayout = nodeLayout;
         }
 
         internal Rule Rule { get; }
@@ -283,13 +283,20 @@ internal static class RuleExpressionCompiler
 
         internal ParameterExpression? Results { get; }
 
-        internal Dictionary<ConditionNode, int>? NodeIndex { get; }
+        /// <summary>Pre-order subtree sizes; see <see cref="ConditionNodeIndexer"/>.</summary>
+        internal int[] NodeLayout { get; }
     }
 
-    private static Expression BuildNode(ConditionNode node, ParameterExpression fact, Context context)
+    /// <summary>
+    /// Builds one condition node. <c>index</c> is the node's pre-order position, which is also its
+    /// slot in the traced results array: children start at <c>index + 1</c> and each later sibling
+    /// follows the previous one by that sibling's subtree size. Positions rather than node identity,
+    /// so a node instance reused at several positions gets a slot per position.
+    /// </summary>
+    private static Expression BuildNode(ConditionNode node, int index, ParameterExpression fact, Context context)
     {
         Expression body = node is ConditionGroup group
-            ? BuildGroup(group, fact, context)
+            ? BuildGroup(group, index, fact, context)
             : BuildLeaf((ConditionLeaf)node, fact, context);
 
         if (context.Results is not null)
@@ -297,7 +304,7 @@ internal static class RuleExpressionCompiler
             // results[i] = (bool?)body, then unwrap: Assign yields the assigned value.
             body = Expression.Property(
                 Expression.Assign(
-                    Expression.ArrayAccess(context.Results, Expression.Constant(context.NodeIndex![node])),
+                    Expression.ArrayAccess(context.Results, Expression.Constant(index)),
                     Expression.Convert(body, typeof(bool?))),
                 "Value");
         }
@@ -305,17 +312,19 @@ internal static class RuleExpressionCompiler
         return body;
     }
 
-    private static Expression BuildGroup(ConditionGroup group, ParameterExpression fact, Context context)
+    private static Expression BuildGroup(ConditionGroup group, int index, ParameterExpression fact, Context context)
     {
+        int childIndex = index + 1;
         if (group.Operator == LogicalOperator.Not)
         {
-            return Expression.Not(BuildNode(group.Children[0], fact, context));
+            return Expression.Not(BuildNode(group.Children[0], childIndex, fact, context));
         }
 
-        Expression combined = BuildNode(group.Children[0], fact, context);
+        Expression combined = BuildNode(group.Children[0], childIndex, fact, context);
         for (int i = 1; i < group.Children.Count; i++)
         {
-            Expression child = BuildNode(group.Children[i], fact, context);
+            childIndex += context.NodeLayout[childIndex];
+            Expression child = BuildNode(group.Children[i], childIndex, fact, context);
             combined = group.Operator == LogicalOperator.And
                 ? Expression.AndAlso(combined, child)
                 : Expression.OrElse(combined, child);

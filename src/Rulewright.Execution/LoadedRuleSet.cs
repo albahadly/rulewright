@@ -37,8 +37,7 @@ internal sealed class RuleEntry
         bool hasComplexOutputs,
         IReadOnlyDictionary<string, object?> elseOutputs,
         bool hasComplexElseOutputs,
-        Dictionary<ConditionNode, int> nodeIndex,
-        int nodeCount)
+        int[] nodeLayout)
     {
         Rule = rule;
         Hash = hash;
@@ -46,8 +45,7 @@ internal sealed class RuleEntry
         HasComplexOutputs = hasComplexOutputs;
         ElseOutputs = elseOutputs;
         HasComplexElseOutputs = hasComplexElseOutputs;
-        NodeIndex = nodeIndex;
-        NodeCount = nodeCount;
+        NodeLayout = nodeLayout;
     }
 
     internal Rule Rule { get; }
@@ -80,8 +78,10 @@ internal sealed class RuleEntry
     /// <summary>Whether the rule has any <c>else</c> actions to run when its condition fails.</summary>
     internal bool HasElse => Rule.ElseActions.Count > 0;
 
-    /// <summary>Pre-order index of every condition node, shared by tracing across execution modes.</summary>
-    internal Dictionary<ConditionNode, int> NodeIndex { get; }
-
-    internal int NodeCount { get; }
+    /// <summary>
+    /// Pre-order subtree sizes for the condition tree, shared by the compiler, the interpreter, and
+    /// the trace builder so per-node results line up across execution modes. Its length is the node
+    /// count. See <see cref="ConditionNodeIndexer"/>.
+    /// </summary>
+    internal int[] NodeLayout { get; }
 }

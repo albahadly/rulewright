@@ -23,13 +23,21 @@ internal static class RuleInterpreter
     private static readonly ConcurrentDictionary<(Type Type, string Name), MemberInfo?> MemberCache =
         new ConcurrentDictionary<(Type, string), MemberInfo?>();
 
+    /// <summary>
+    /// Evaluates one condition node. <c>index</c> is the node's pre-order position, which is also
+    /// its slot in <c>results</c>: children start at <c>index + 1</c> and each later sibling follows
+    /// the previous one by that sibling's subtree size, read from <c>layout</c>. Positions rather
+    /// than node identity, so one node instance reused at several positions gets a slot per
+    /// position.
+    /// </summary>
     internal static bool Evaluate(
         ConditionNode node,
+        int index,
         object fact,
         IReadOnlyDictionary<string, IRuleFunction> functions,
         TimeSpan regexTimeout,
         bool?[]? results,
-        Dictionary<ConditionNode, int>? nodeIndex)
+        int[] layout)
     {
         bool outcome;
         if (node is ConditionGroup group)
@@ -37,33 +45,43 @@ internal static class RuleInterpreter
             switch (group.Operator)
             {
                 case LogicalOperator.And:
+                {
                     outcome = true;
+                    int childIndex = index + 1;
                     foreach (ConditionNode child in group.Children)
                     {
-                        if (!Evaluate(child, fact, functions, regexTimeout, results, nodeIndex))
+                        if (!Evaluate(child, childIndex, fact, functions, regexTimeout, results, layout))
                         {
                             outcome = false;
                             break;
                         }
+
+                        childIndex += layout[childIndex];
                     }
 
                     break;
+                }
 
                 case LogicalOperator.Or:
+                {
                     outcome = false;
+                    int childIndex = index + 1;
                     foreach (ConditionNode child in group.Children)
                     {
-                        if (Evaluate(child, fact, functions, regexTimeout, results, nodeIndex))
+                        if (Evaluate(child, childIndex, fact, functions, regexTimeout, results, layout))
                         {
                             outcome = true;
                             break;
                         }
+
+                        childIndex += layout[childIndex];
                     }
 
                     break;
+                }
 
                 default:
-                    outcome = !Evaluate(group.Children[0], fact, functions, regexTimeout, results, nodeIndex);
+                    outcome = !Evaluate(group.Children[0], index + 1, fact, functions, regexTimeout, results, layout);
                     break;
             }
         }
@@ -74,7 +92,7 @@ internal static class RuleInterpreter
 
         if (results is not null)
         {
-            results[nodeIndex![node]] = outcome;
+            results[index] = outcome;
         }
 
         return outcome;
@@ -155,11 +173,17 @@ internal static class RuleInterpreter
         }
     }
 
+    /// <summary>
+    /// Set membership, matching the compiled path's typed <c>HashSet</c> exactly: a null in the set
+    /// contributes nothing. Null is a field's absence, not a member — so a null field is in no set,
+    /// which is what the documented null semantics say (<c>In</c> false, <c>NotIn</c> true) and what
+    /// the compiled path already does by dropping nulls when it builds the set.
+    /// </summary>
     private static bool IsInSet(object? fieldValue, object?[] items)
     {
         foreach (object? item in items)
         {
-            if (RuntimeComparisons.AreEqual(fieldValue, item))
+            if (item is not null && RuntimeComparisons.AreEqual(fieldValue, item))
             {
                 return true;
             }
