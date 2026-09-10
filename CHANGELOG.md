@@ -7,8 +7,9 @@ in a minor version; each one is called out below.
 
 ## [0.3.0]
 
-Additive: nothing that loaded under 0.2.0 changes meaning. Rules can now reason about collection
-fields, which `In`/`NotIn` never could.
+The first release since 0.1.1 — it carries everything in 0.2.0 below as well, which was never
+published. Additive relative to 0.2.0: rules can now reason about collection fields, which
+`In`/`NotIn` never could. Coming from 0.1.1, read 0.2.0's **Changed** section too.
 
 ### Added
 
@@ -48,6 +49,10 @@ fields, which `In`/`NotIn` never could.
   condition is rendered into the node's description rather than traced separately.
 
 ## [0.2.0]
+
+**Never published to nuget.org.** It exists as a tagged state in this repository only; everything
+below shipped in 0.3.0, which went straight from 0.1.1. If you are looking for one of these fixes
+on the feed, take 0.3.0.
 
 ### Fixed
 
