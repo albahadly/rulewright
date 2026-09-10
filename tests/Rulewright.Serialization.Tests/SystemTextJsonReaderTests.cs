@@ -47,4 +47,33 @@ public class SystemTextJsonReaderTests
         Assert.IsType<decimal>(_reader.Read("[10.5]").Items[0].ToClrValue());
         Assert.IsType<double>(_reader.Read("[1e300]").Items[0].ToClrValue());
     }
+
+    /// <summary>
+    /// An overflowing literal parses as infinity on .NET Core but fails outright on .NET
+    /// Framework, so accepting it would make the same document load on one target framework and
+    /// not another. Both refuse it, as the documented parse failure rather than a raw
+    /// ArgumentException from an internal factory.
+    /// </summary>
+    [Theory]
+    [InlineData("1e400")]
+    [InlineData("-1e400")]
+    public void OutOfRangeNumber_IsARuleParseException_OnEveryTargetFramework(string literal)
+    {
+        string json = "{\"id\":\"r\",\"condition\":{\"field\":\"A\",\"operator\":\"LessThan\",\"value\":" + literal + "}}";
+
+        RuleParseException error = Assert.Throws<RuleParseException>(() => new SystemTextJsonReader().Read(json));
+        Assert.Contains("finite", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>Numbers at the edge of what the engine represents still load.</summary>
+    [Theory]
+    [InlineData("1e308")]
+    [InlineData("-1e308")]
+    [InlineData("0.000001")]
+    public void LargeButFiniteNumbers_Load(string literal)
+    {
+        RuleJsonValue document = new SystemTextJsonReader().Read("{\"v\":" + literal + "}");
+        Assert.True(document.TryGetProperty("v", out RuleJsonValue value));
+        Assert.Equal(RuleJsonValueKind.Number, value.Kind);
+    }
 }

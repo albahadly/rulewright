@@ -225,4 +225,51 @@ public class RuleSetValidatorTests
         }");
         Assert.Contains(result.Errors, e => e.Path == "/else" && e.Message.Contains("must be an array"));
     }
+
+    /// <summary>
+    /// The vocabulary is closed, so an undefined key is almost always a typo. Silently ignoring
+    /// "actons" produced a rule that fired and wrote nothing - far harder to spot than an error.
+    /// </summary>
+    [Fact]
+    public void UnknownProperty_IsReportedAtItsOwnPointer()
+    {
+        RuleSetValidationResult rule = Validate(@"{ ""id"": ""r"",
+            ""condition"": { ""field"": ""A"", ""operator"": ""IsNull"" },
+            ""actons"": [] }");
+        Assert.Contains(rule.Errors, e => e.Path == "/actons" && e.Message.Contains("Unknown property"));
+
+        RuleSetValidationResult leaf = Validate(@"{ ""id"": ""r"",
+            ""condition"": { ""feild"": ""A"", ""operator"": ""IsNull"" } }");
+        Assert.Contains(leaf.Errors, e => e.Path == "/condition/feild");
+
+        RuleSetValidationResult action = Validate(@"{ ""id"": ""r"",
+            ""condition"": { ""field"": ""A"", ""operator"": ""IsNull"" },
+            ""actions"": [ { ""type"": ""setOutput"", ""targt"": ""X"", ""value"": 1 } ] }");
+        Assert.Contains(action.Errors, e => e.Path == "/actions/0/targt");
+    }
+
+    /// <summary>The keys the schema does define stay accepted, including free-text documentation.</summary>
+    [Fact]
+    public void KnownProperties_IncludingDescriptions_AreAccepted()
+    {
+        RuleSetValidationResult result = Validate(@"{
+            ""name"": ""set"", ""description"": ""what this set is for"",
+            ""rules"": [ { ""id"": ""r"", ""description"": ""d"", ""priority"": 1, ""enabled"": true,
+                ""layout"": { ""x"": 1 },
+                ""condition"": { ""field"": ""A"", ""operator"": ""IsNull"" },
+                ""actions"": [ { ""type"": ""setOutput"", ""target"": ""X"", ""value"": 1 } ],
+                ""else"": [ { ""type"": ""removeOutput"", ""target"": ""X"" } ] } ] }");
+        Assert.True(result.IsValid, string.Join("; ", result.Errors.Select(e => e.Path + " " + e.Message)));
+    }
+
+    /// <summary>A document is a table or a rule set; carrying both silently dropped the rules.</summary>
+    [Fact]
+    public void DecisionTableAndRulesTogether_IsReported()
+    {
+        RuleSetValidationResult result = Validate(@"{
+            ""decisionTable"": { ""inputs"": [ { ""field"": ""A"" } ], ""outputs"": [ { ""target"": ""D"" } ],
+                ""rows"": [ { ""when"": [1], ""then"": [1] } ] },
+            ""rules"": [ { ""id"": ""r"", ""condition"": { ""field"": ""A"", ""operator"": ""IsNull"" } } ] }");
+        Assert.Contains(result.Errors, e => e.Message.Contains("not both"));
+    }
 }

@@ -58,6 +58,13 @@ public sealed class NewtonsoftJsonReader : IRuleJsonReader
         {
             throw new RuleParseException($"Invalid JSON: {ex.Message}", ex);
         }
+        catch (ArgumentException ex)
+        {
+            // A syntactically valid token the neutral DOM refuses (an overflowing number, say) is
+            // still a bad document, so it surfaces as the documented parse failure rather than as a
+            // raw ArgumentException from an internal factory.
+            throw new RuleParseException($"Invalid JSON: {ex.Message}", ex);
+        }
     }
 
     private static RuleJsonValue Convert(JToken token)

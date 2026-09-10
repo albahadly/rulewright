@@ -164,7 +164,6 @@ public static class RuleSetParser
         }
 
         int rowCount = rows.Items.Count;
-        var ownConditions = new ConditionNode[rowCount];
         var expanded = new List<Rule>(rowCount);
         for (int r = 0; r < rowCount; r++)
         {
@@ -181,25 +180,12 @@ public static class RuleSetParser
                 leaves.Add(new ConditionLeaf(fields[c], operators[c], ParseLeafValue(cell)));
             }
 
-            ConditionNode ownCondition = leaves.Count switch
+            ConditionNode condition = leaves.Count switch
             {
                 0 => AlwaysTrue(fields[0]),
                 1 => leaves[0],
                 _ => new ConditionGroup(LogicalOperator.And, leaves),
             };
-            ownConditions[r] = ownCondition;
-
-            ConditionNode condition = ownCondition;
-            if (firstPolicy && r > 0)
-            {
-                var parts = new List<ConditionNode>(r + 1) { ownCondition };
-                for (int p = 0; p < r; p++)
-                {
-                    parts.Add(new ConditionGroup(LogicalOperator.Not, new[] { ownConditions[p] }));
-                }
-
-                condition = new ConditionGroup(LogicalOperator.And, parts);
-            }
 
             rows.Items[r].TryGetProperty("then", out RuleJsonValue then);
             var actions = new List<RuleAction>();
@@ -218,7 +204,7 @@ public static class RuleSetParser
             expanded.Add(new Rule(id, condition, actions, description: null, priority: rowCount - r));
         }
 
-        return new RuleSet(expanded, name);
+        return new RuleSet(expanded, name, stopAfterFirstMatch: firstPolicy);
     }
 
     /// <summary>

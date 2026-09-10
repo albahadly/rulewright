@@ -35,6 +35,16 @@ public static class RuleSetValidator
 
         if (document.TryGetProperty("decisionTable", out RuleJsonValue decisionTable))
         {
+            // A document is a table or a rule set, never both: silently expanding only the table
+            // would drop the rules without a word.
+            if (document.TryGetProperty("rules", out _))
+            {
+                errors.Add(new RuleValidationError(
+                    string.Empty,
+                    "A document has 'decisionTable' or 'rules', not both."));
+            }
+
+            ValidateUnknownProperties(document, string.Empty, DecisionTableDocumentProperties, errors);
             ValidateDecisionTable(decisionTable, "/decisionTable", errors);
         }
         else if (document.TryGetProperty("rules", out _))
@@ -49,11 +59,57 @@ public static class RuleSetValidator
         return errors.Count == 0 ? RuleSetValidationResult.Success : new RuleSetValidationResult(errors);
     }
 
+    private static readonly string[] DecisionTableDocumentProperties = { "decisionTable" };
+    private static readonly string[] RuleSetProperties = { "name", "description", "rules" };
+    private static readonly string[] RuleProperties = { "id", "description", "priority", "enabled", "condition", "actions", "else", "layout" };
+    private static readonly string[] GroupProperties = { "type", "operator", "rules" };
+    private static readonly string[] LeafProperties = { "field", "expression", "operator", "value", "name" };
+    private static readonly string[] ActionProperties = { "type", "target", "value" };
+    private static readonly string[] DecisionTableProperties = { "id", "name", "description", "hitPolicy", "inputs", "outputs", "rows" };
+    private static readonly string[] DecisionInputProperties = { "field", "operator" };
+    private static readonly string[] DecisionOutputProperties = { "target", "type" };
+    private static readonly string[] DecisionRowProperties = { "when", "then" };
+
+    /// <summary>
+    /// Reports any property the schema does not define. The vocabulary is closed, so an
+    /// undefined key is almost always a typo — and a silently ignored <c>"actons"</c> produces a
+    /// rule that fires and writes nothing, which is far harder to spot than an error here.
+    /// </summary>
+    private static void ValidateUnknownProperties(
+        RuleJsonValue node, string path, string[] known, List<RuleValidationError> errors)
+    {
+        foreach (KeyValuePair<string, RuleJsonValue> property in node.Properties)
+        {
+            if (Array.IndexOf(known, property.Key) >= 0)
+            {
+                continue;
+            }
+
+            errors.Add(new RuleValidationError(
+                path + "/" + EscapePointer(property.Key),
+                $"Unknown property '{property.Key}'. Expected one of: {string.Join(", ", known)}."));
+        }
+    }
+
+    /// <summary>Escapes a property name for a JSON pointer segment (RFC 6901).</summary>
+    private static string EscapePointer(string name)
+        => name.IndexOf('~') < 0 && name.IndexOf('/') < 0
+            ? name
+            : name.Replace("~", "~0").Replace("/", "~1");
+
     private static void ValidateRuleSet(RuleJsonValue ruleSet, List<RuleValidationError> errors)
     {
+        ValidateUnknownProperties(ruleSet, string.Empty, RuleSetProperties, errors);
+
         if (ruleSet.TryGetProperty("name", out RuleJsonValue name) && name.Kind != RuleJsonValueKind.String)
         {
             errors.Add(new RuleValidationError("/name", "'name' must be a string."));
+        }
+
+        if (ruleSet.TryGetProperty("description", out RuleJsonValue setDescription)
+            && setDescription.Kind != RuleJsonValueKind.String)
+        {
+            errors.Add(new RuleValidationError("/description", "'description' must be a string."));
         }
 
         ruleSet.TryGetProperty("rules", out RuleJsonValue rules);
@@ -92,6 +148,8 @@ public static class RuleSetValidator
             errors.Add(new RuleValidationError(path, "A rule must be a JSON object."));
             return;
         }
+
+        ValidateUnknownProperties(rule, path, RuleProperties, errors);
 
         if (!rule.TryGetProperty("id", out RuleJsonValue id))
         {
@@ -169,6 +227,8 @@ public static class RuleSetValidator
 
     private static void ValidateGroup(RuleJsonValue group, string path, List<RuleValidationError> errors)
     {
+        ValidateUnknownProperties(group, path, GroupProperties, errors);
+
         string? operatorName = null;
         if (!group.TryGetProperty("operator", out RuleJsonValue op))
         {
@@ -206,6 +266,8 @@ public static class RuleSetValidator
 
     private static void ValidateLeaf(RuleJsonValue leaf, string path, List<RuleValidationError> errors)
     {
+        ValidateUnknownProperties(leaf, path, LeafProperties, errors);
+
         if (!leaf.TryGetProperty("operator", out RuleJsonValue op) || op.Kind != RuleJsonValueKind.String)
         {
             errors.Add(new RuleValidationError(path, "'operator' (a string) is required for a condition."));
@@ -441,6 +503,8 @@ public static class RuleSetValidator
             return;
         }
 
+        ValidateUnknownProperties(action, path, ActionProperties, errors);
+
         bool hasType = action.TryGetProperty("type", out RuleJsonValue type);
         bool isRemove = hasType && type.Kind == RuleJsonValueKind.String && type.GetString() == Core.RuleAction.RemoveOutputType;
         if (!hasType
@@ -583,6 +647,8 @@ public static class RuleSetValidator
             return;
         }
 
+        ValidateUnknownProperties(table, path, DecisionTableProperties, errors);
+
         if (table.TryGetProperty("hitPolicy", out RuleJsonValue hitPolicy)
             && (hitPolicy.Kind != RuleJsonValueKind.String || hitPolicy.GetString() is not ("collect" or "first")))
         {
@@ -629,6 +695,8 @@ public static class RuleSetValidator
                 continue;
             }
 
+            ValidateUnknownProperties(column, columnPath, DecisionInputProperties, errors);
+
             if (!column.TryGetProperty("field", out RuleJsonValue field)
                 || field.Kind != RuleJsonValueKind.String
                 || field.GetString().Length == 0)
@@ -668,6 +736,8 @@ public static class RuleSetValidator
                 continue;
             }
 
+            ValidateUnknownProperties(column, columnPath, DecisionOutputProperties, errors);
+
             if (!column.TryGetProperty("target", out RuleJsonValue target)
                 || target.Kind != RuleJsonValueKind.String
                 || target.GetString().Length == 0)
@@ -701,6 +771,8 @@ public static class RuleSetValidator
             errors.Add(new RuleValidationError(path, "A row must be a JSON object."));
             return;
         }
+
+        ValidateUnknownProperties(row, path, DecisionRowProperties, errors);
 
         if (!row.TryGetProperty("when", out RuleJsonValue when) || when.Kind != RuleJsonValueKind.Array)
         {

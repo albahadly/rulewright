@@ -4,70 +4,138 @@
   "title": "Rulewright rule document",
   "description": "A Rulewright rule document: either a single rule or a rule set. Logic lives in 'condition' and 'actions'; the 'layout' key is presentation metadata for canvas tools and is ignored entirely by the engine.",
   "oneOf": [
-    { "$ref": "#/$defs/rule" },
-    { "$ref": "#/$defs/ruleSet" },
-    { "$ref": "#/$defs/decisionTableDocument" }
+    {
+      "$ref": "#/$defs/rule"
+    },
+    {
+      "$ref": "#/$defs/ruleSet"
+    },
+    {
+      "$ref": "#/$defs/decisionTableDocument"
+    }
   ],
   "$defs": {
     "decisionTableDocument": {
       "type": "object",
-      "properties": { "decisionTable": { "$ref": "#/$defs/decisionTable" } },
-      "required": ["decisionTable"]
+      "properties": {
+        "decisionTable": {
+          "$ref": "#/$defs/decisionTable"
+        }
+      },
+      "required": [
+        "decisionTable"
+      ],
+      "additionalProperties": false
     },
     "decisionTable": {
       "type": "object",
-      "description": "A tabular authoring form that expands into ordinary rules — one rule per row. Each input column contributes a condition (a null cell is a wildcard); a row with all-wildcard inputs is a catch-all. Each output column contributes an action.",
+      "description": "A tabular authoring form that expands into ordinary rules \u2014 one rule per row. Each input column contributes a condition (a null cell is a wildcard); a row with all-wildcard inputs is a catch-all. Each output column contributes an action.",
       "properties": {
-        "id": { "type": "string", "description": "Base for generated row rule ids ('<id>-<rowIndex>'); defaults to 'row'." },
-        "name": { "type": "string", "description": "Optional display name for the expanded rule set." },
+        "id": {
+          "type": "string",
+          "description": "Base for generated row rule ids ('<id>-<rowIndex>'); defaults to 'row'."
+        },
+        "name": {
+          "type": "string",
+          "description": "Optional display name for the expanded rule set."
+        },
+        "description": {
+          "type": "string",
+          "description": "Free-text documentation; ignored by the engine."
+        },
         "hitPolicy": {
-          "enum": ["collect", "first"],
+          "enum": [
+            "collect",
+            "first"
+          ],
           "default": "collect",
           "description": "'collect' (default): every matching row applies its actions in row order. 'first': only the first matching row (in row order) applies."
         },
         "inputs": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/decisionInput" },
+          "items": {
+            "$ref": "#/$defs/decisionInput"
+          },
           "description": "Input columns, left to right; each maps a 'when' cell to a condition."
         },
         "outputs": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/decisionOutput" },
+          "items": {
+            "$ref": "#/$defs/decisionOutput"
+          },
           "description": "Output columns, left to right; each maps a 'then' cell to an action."
         },
         "rows": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/decisionRow" }
+          "items": {
+            "$ref": "#/$defs/decisionRow"
+          }
         }
       },
-      "required": ["inputs", "outputs", "rows"]
+      "required": [
+        "inputs",
+        "outputs",
+        "rows"
+      ],
+      "additionalProperties": false
     },
     "decisionInput": {
       "type": "object",
       "properties": {
-        "field": { "type": "string", "minLength": 1, "description": "Dotted fact path this column compares against." },
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Dotted fact path this column compares against."
+        },
         "operator": {
-          "enum": ["Equals", "NotEquals", "GreaterThan", "GreaterThanOrEqual", "LessThan", "LessThanOrEqual", "Contains", "StartsWith", "EndsWith", "MatchesRegex", "In", "NotIn"],
+          "enum": [
+            "Equals",
+            "NotEquals",
+            "GreaterThan",
+            "GreaterThanOrEqual",
+            "LessThan",
+            "LessThanOrEqual",
+            "Contains",
+            "StartsWith",
+            "EndsWith",
+            "MatchesRegex",
+            "In",
+            "NotIn"
+          ],
           "default": "Equals",
           "description": "Comparison applied to non-wildcard cells in this column."
         }
       },
-      "required": ["field"]
+      "required": [
+        "field"
+      ],
+      "additionalProperties": false
     },
     "decisionOutput": {
       "type": "object",
       "properties": {
-        "target": { "type": "string", "minLength": 1, "description": "Output key this column writes." },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Output key this column writes."
+        },
         "type": {
-          "enum": ["setOutput", "addToOutput", "appendToOutput"],
+          "enum": [
+            "setOutput",
+            "addToOutput",
+            "appendToOutput"
+          ],
           "default": "setOutput",
           "description": "How a non-null 'then' cell combines into the outputs."
         }
       },
-      "required": ["target"]
+      "required": [
+        "target"
+      ],
+      "additionalProperties": false
     },
     "decisionRow": {
       "type": "object",
@@ -78,11 +146,17 @@
         },
         "then": {
           "type": "array",
-          "items": { "$ref": "#/$defs/expression" },
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
           "description": "One cell per output column. A null cell skips that output for this row; any other value is an expression."
         }
       },
-      "required": ["when", "then"]
+      "required": [
+        "when",
+        "then"
+      ],
+      "additionalProperties": false
     },
     "ruleSet": {
       "type": "object",
@@ -91,14 +165,23 @@
           "type": "string",
           "description": "Optional display name for the rule set."
         },
+        "description": {
+          "type": "string",
+          "description": "Free-text documentation; ignored by the engine."
+        },
         "rules": {
           "type": "array",
-          "items": { "$ref": "#/$defs/rule" },
+          "items": {
+            "$ref": "#/$defs/rule"
+          },
           "minItems": 1,
           "description": "The rules in this set. Evaluation order is by descending 'priority', then document order."
         }
       },
-      "required": ["rules"]
+      "required": [
+        "rules"
+      ],
+      "additionalProperties": false
     },
     "rule": {
       "type": "object",
@@ -122,55 +205,92 @@
           "default": true,
           "description": "Disabled rules are skipped entirely during evaluation."
         },
-        "condition": { "$ref": "#/$defs/condition" },
+        "condition": {
+          "$ref": "#/$defs/condition"
+        },
         "actions": {
           "type": "array",
-          "items": { "$ref": "#/$defs/action" },
+          "items": {
+            "$ref": "#/$defs/action"
+          },
           "description": "Actions applied when the condition evaluates to true."
         },
         "else": {
           "type": "array",
-          "items": { "$ref": "#/$defs/action" },
-          "description": "Actions applied when the condition evaluates to false — the rule's 'else' branch. Same shape as 'actions'."
+          "items": {
+            "$ref": "#/$defs/action"
+          },
+          "description": "Actions applied when the condition evaluates to false \u2014 the rule's 'else' branch. Same shape as 'actions'."
         },
         "layout": {
           "type": "object",
           "description": "Presentation/layout metadata for visual rule builders (node positions, canvas ids). The engine never reads this key, and it is excluded from the rule content hash used for compilation caching."
         }
       },
-      "required": ["id", "condition"],
-      "not": { "required": ["type"] }
+      "required": [
+        "id",
+        "condition"
+      ],
+      "not": {
+        "required": [
+          "type"
+        ]
+      },
+      "additionalProperties": false
     },
     "condition": {
       "oneOf": [
-        { "$ref": "#/$defs/conditionGroup" },
-        { "$ref": "#/$defs/conditionLeaf" }
+        {
+          "$ref": "#/$defs/conditionGroup"
+        },
+        {
+          "$ref": "#/$defs/conditionLeaf"
+        }
       ]
     },
     "conditionGroup": {
       "type": "object",
       "properties": {
-        "type": { "const": "group" },
+        "type": {
+          "const": "group"
+        },
         "operator": {
-          "enum": ["AND", "OR", "NOT"],
+          "enum": [
+            "AND",
+            "OR",
+            "NOT"
+          ],
           "description": "Logical combinator. AND/OR take one or more child conditions and short-circuit left to right; NOT takes exactly one child."
         },
         "rules": {
           "type": "array",
-          "items": { "$ref": "#/$defs/condition" },
+          "items": {
+            "$ref": "#/$defs/condition"
+          },
           "minItems": 1,
           "description": "Child conditions."
         }
       },
-      "required": ["type", "operator", "rules"],
+      "required": [
+        "type",
+        "operator",
+        "rules"
+      ],
       "if": {
-        "properties": { "operator": { "const": "NOT" } }
+        "properties": {
+          "operator": {
+            "const": "NOT"
+          }
+        }
       },
       "then": {
         "properties": {
-          "rules": { "maxItems": 1 }
+          "rules": {
+            "maxItems": 1
+          }
         }
-      }
+      },
+      "additionalProperties": false
     },
     "conditionLeaf": {
       "type": "object",
@@ -212,55 +332,171 @@
           "description": "Registered custom function name; required when operator is 'custom'."
         }
       },
-      "required": ["operator"],
-      "not": { "required": ["type"] },
+      "required": [
+        "operator"
+      ],
+      "not": {
+        "required": [
+          "type"
+        ]
+      },
       "allOf": [
         {
-          "if": { "properties": { "operator": { "const": "custom" } }, "required": ["operator"] },
-          "then": { "required": ["name"], "not": { "required": ["expression"] } },
-          "else": { "anyOf": [ { "required": ["field"] }, { "required": ["expression"] } ] }
-        },
-        { "not": { "required": ["field", "expression"] } },
-        {
-          "if": { "properties": { "operator": { "enum": ["In", "NotIn"] } }, "required": ["operator"] },
-          "then": {
+          "if": {
             "properties": {
-              "value": { "type": "array", "minItems": 1 }
+              "operator": {
+                "const": "custom"
+              }
             },
-            "required": ["value"]
+            "required": [
+              "operator"
+            ]
+          },
+          "then": {
+            "required": [
+              "name"
+            ],
+            "not": {
+              "required": [
+                "expression"
+              ]
+            }
+          },
+          "else": {
+            "anyOf": [
+              {
+                "required": [
+                  "field"
+                ]
+              },
+              {
+                "required": [
+                  "expression"
+                ]
+              }
+            ]
           }
         },
         {
-          "if": { "properties": { "operator": { "enum": ["Contains", "StartsWith", "EndsWith", "MatchesRegex"] } }, "required": ["operator"] },
-          "then": {
-            "properties": {
-              "value": { "type": "string" }
-            },
-            "required": ["value"]
+          "not": {
+            "required": [
+              "field",
+              "expression"
+            ]
           }
-        },
-        {
-          "if": { "properties": { "operator": { "enum": ["IsNull", "IsNotNull"] } }, "required": ["operator"] },
-          "then": { "not": { "required": ["value"] } }
         },
         {
           "if": {
             "properties": {
               "operator": {
-                "enum": ["Equals", "NotEquals", "GreaterThan", "GreaterThanOrEqual", "LessThan", "LessThanOrEqual"]
+                "enum": [
+                  "In",
+                  "NotIn"
+                ]
               }
             },
-            "required": ["operator"]
+            "required": [
+              "operator"
+            ]
           },
-          "then": { "required": ["value"] }
+          "then": {
+            "properties": {
+              "value": {
+                "type": "array",
+                "minItems": 1
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operator": {
+                "enum": [
+                  "Contains",
+                  "StartsWith",
+                  "EndsWith",
+                  "MatchesRegex"
+                ]
+              }
+            },
+            "required": [
+              "operator"
+            ]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operator": {
+                "enum": [
+                  "IsNull",
+                  "IsNotNull"
+                ]
+              }
+            },
+            "required": [
+              "operator"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "value"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operator": {
+                "enum": [
+                  "Equals",
+                  "NotEquals",
+                  "GreaterThan",
+                  "GreaterThanOrEqual",
+                  "LessThan",
+                  "LessThanOrEqual"
+                ]
+              }
+            },
+            "required": [
+              "operator"
+            ]
+          },
+          "then": {
+            "required": [
+              "value"
+            ]
+          }
         }
-      ]
+      ],
+      "additionalProperties": false
     },
     "action": {
       "type": "object",
       "properties": {
         "type": {
-          "enum": ["setOutput", "addToOutput", "appendToOutput", "removeOutput"],
+          "enum": [
+            "setOutput",
+            "addToOutput",
+            "appendToOutput",
+            "removeOutput"
+          ],
           "description": "How the action changes the result's outputs at 'target': 'setOutput' replaces, 'addToOutput' adds numerically (a running total across fired rules), 'appendToOutput' appends to a list (collected across fired rules), 'removeOutput' deletes the key. For the accumulators, a null value contributes nothing."
         },
         "target": {
@@ -273,33 +509,76 @@
           "description": "The value written to the output key: a constant scalar, or a value expression computed from the fact at evaluation time. Required for every type except 'removeOutput', which takes no value."
         }
       },
-      "required": ["type", "target"],
+      "required": [
+        "type",
+        "target"
+      ],
       "allOf": [
         {
-          "if": { "properties": { "type": { "const": "removeOutput" } }, "required": ["type"] },
-          "then": { "not": { "required": ["value"] } },
-          "else": { "required": ["value"] }
+          "if": {
+            "properties": {
+              "type": {
+                "const": "removeOutput"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "value"
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "value"
+            ]
+          }
         }
-      ]
+      ],
+      "additionalProperties": false
     },
     "expression": {
-      "description": "An output value. Pure data — a closed operator vocabulary, never embedded code. A bare scalar is a constant; object nodes are { 'literal': <scalar> }, { 'field': '<dotted path>' }, or { 'op': '<operator>', 'operands': [ <expression>, ... ] }. Operand order is significant for subtract, divide, and modulo.",
+      "description": "An output value. Pure data \u2014 a closed operator vocabulary, never embedded code. A bare scalar is a constant; object nodes are { 'literal': <scalar> }, { 'field': '<dotted path>' }, or { 'op': '<operator>', 'operands': [ <expression>, ... ] }. Operand order is significant for subtract, divide, and modulo.",
       "oneOf": [
-        { "type": ["string", "number", "boolean", "null"] },
-        { "$ref": "#/$defs/literalExpression" },
-        { "$ref": "#/$defs/fieldExpression" },
-        { "$ref": "#/$defs/operatorExpression" }
+        {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        {
+          "$ref": "#/$defs/literalExpression"
+        },
+        {
+          "$ref": "#/$defs/fieldExpression"
+        },
+        {
+          "$ref": "#/$defs/operatorExpression"
+        }
       ]
     },
     "literalExpression": {
       "type": "object",
       "properties": {
         "literal": {
-          "type": ["string", "number", "boolean", "null"],
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ],
           "description": "An explicit constant, equivalent to writing the bare scalar."
         }
       },
-      "required": ["literal"],
+      "required": [
+        "literal"
+      ],
       "additionalProperties": false
     },
     "fieldExpression": {
@@ -311,37 +590,109 @@
           "description": "Dotted path read from the fact, e.g. 'Order.Total'. A null anywhere along the path yields null."
         }
       },
-      "required": ["field"],
+      "required": [
+        "field"
+      ],
       "additionalProperties": false
     },
     "operatorExpression": {
       "type": "object",
       "properties": {
         "op": {
-          "enum": ["add", "subtract", "multiply", "divide", "modulo", "negate", "concat", "coalesce"],
+          "enum": [
+            "add",
+            "subtract",
+            "multiply",
+            "divide",
+            "modulo",
+            "negate",
+            "concat",
+            "coalesce"
+          ],
           "description": "Arithmetic (add/subtract/multiply/divide/modulo/negate), string concatenation (concat), or first-non-null selection (coalesce). Any null operand propagates to null (except coalesce); division or modulo by zero yields null."
         },
         "operands": {
           "type": "array",
-          "items": { "$ref": "#/$defs/expression" },
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
           "minItems": 1,
           "description": "Operand expressions. negate takes exactly 1; subtract/divide/modulo take exactly 2; add/multiply/concat/coalesce take 2 or more."
         }
       },
-      "required": ["op", "operands"],
+      "required": [
+        "op",
+        "operands"
+      ],
       "additionalProperties": false,
       "allOf": [
         {
-          "if": { "properties": { "op": { "const": "negate" } }, "required": ["op"] },
-          "then": { "properties": { "operands": { "minItems": 1, "maxItems": 1 } } }
+          "if": {
+            "properties": {
+              "op": {
+                "const": "negate"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "properties": {
+              "operands": {
+                "minItems": 1,
+                "maxItems": 1
+              }
+            }
+          }
         },
         {
-          "if": { "properties": { "op": { "enum": ["subtract", "divide", "modulo"] } }, "required": ["op"] },
-          "then": { "properties": { "operands": { "minItems": 2, "maxItems": 2 } } }
+          "if": {
+            "properties": {
+              "op": {
+                "enum": [
+                  "subtract",
+                  "divide",
+                  "modulo"
+                ]
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "properties": {
+              "operands": {
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          }
         },
         {
-          "if": { "properties": { "op": { "enum": ["add", "multiply", "concat", "coalesce"] } }, "required": ["op"] },
-          "then": { "properties": { "operands": { "minItems": 2 } } }
+          "if": {
+            "properties": {
+              "op": {
+                "enum": [
+                  "add",
+                  "multiply",
+                  "concat",
+                  "coalesce"
+                ]
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "properties": {
+              "operands": {
+                "minItems": 2
+              }
+            }
+          }
         }
       ]
     }

@@ -126,13 +126,99 @@ public sealed class RuleJsonValue
             throw new ArgumentException("Number text must not be null or empty.", nameof(rawText));
         }
 
-        if (!double.TryParse(rawText, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+        // Shape first, then range — and deliberately not double.TryParse for both. On .NET Core an
+        // overflowing literal parses as infinity while on .NET Framework it simply fails, so using
+        // TryParse to decide *which* complaint to make would give the same document two different
+        // errors depending on the target framework. Checking the JSON grammar directly keeps the
+        // two legs word for word identical.
+        if (!IsJsonNumberSyntax(rawText))
         {
             throw new ArgumentException($"'{rawText}' is not a valid JSON number.", nameof(rawText));
         }
 
+        bool parsed = double.TryParse(rawText, NumberStyles.Float, CultureInfo.InvariantCulture, out double value);
+        if (!parsed || double.IsInfinity(value) || double.IsNaN(value))
+        {
+            throw new ArgumentException(
+                $"'{rawText}' is outside the range Rulewright can represent; JSON numbers must be finite.",
+                nameof(rawText));
+        }
+
         return new RuleJsonValue(RuleJsonValueKind.Number, null, null, null, rawText);
     }
+
+    /// <summary>
+    /// Whether the text matches the JSON number grammar (RFC 8259):
+    /// <c>-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?</c>. Hand-rolled rather than a regular
+    /// expression because it runs once per number token in every document parsed.
+    /// </summary>
+    private static bool IsJsonNumberSyntax(string text)
+    {
+        int i = 0;
+        int length = text.Length;
+
+        if (i < length && text[i] == '-')
+        {
+            i++;
+        }
+
+        // Integer part: a lone zero, or a non-zero digit followed by any digits.
+        if (i >= length || !IsDigit(text[i]))
+        {
+            return false;
+        }
+
+        if (text[i] == '0')
+        {
+            i++;
+        }
+        else
+        {
+            while (i < length && IsDigit(text[i]))
+            {
+                i++;
+            }
+        }
+
+        // Optional fraction: a point followed by at least one digit.
+        if (i < length && text[i] == '.')
+        {
+            i++;
+            if (i >= length || !IsDigit(text[i]))
+            {
+                return false;
+            }
+
+            while (i < length && IsDigit(text[i]))
+            {
+                i++;
+            }
+        }
+
+        // Optional exponent: e or E, an optional sign, then at least one digit.
+        if (i < length && (text[i] == 'e' || text[i] == 'E'))
+        {
+            i++;
+            if (i < length && (text[i] == '+' || text[i] == '-'))
+            {
+                i++;
+            }
+
+            if (i >= length || !IsDigit(text[i]))
+            {
+                return false;
+            }
+
+            while (i < length && IsDigit(text[i]))
+            {
+                i++;
+            }
+        }
+
+        return i == length;
+    }
+
+    private static bool IsDigit(char c) => c >= '0' && c <= '9';
 
     /// <summary>Creates a number node from an integer.</summary>
     /// <param name="value">The value.</param>

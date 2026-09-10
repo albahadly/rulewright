@@ -152,18 +152,57 @@ public class DecisionTableTests
         Assert.All(row0.Actions, a => Assert.Equal(RuleAction.SetOutputType, a.Type));
     }
 
+    /// <summary>
+    /// The `first` hit policy rides on the rule set, not on the row conditions. Encoding it by
+    /// ANDing each row with the negation of every earlier row was quadratic and made each row's
+    /// condition unreadable; rows are already in priority order, so stopping after the first match
+    /// is equivalent and linear.
+    /// </summary>
     [Fact]
-    public void FirstPolicy_BakesNegationOfEarlierRows()
+    public void FirstPolicy_SetsStopAfterFirstMatch_AndLeavesRowConditionsAlone()
     {
         string firstTable = ValidTable.Replace("\"hitPolicy\": \"collect\"", "\"hitPolicy\": \"first\"");
-        Rule row1 = Parse(firstTable).Rules[1];
+        RuleSet parsed = Parse(firstTable);
 
-        var group = Assert.IsType<ConditionGroup>(row1.Condition);
-        Assert.Equal(LogicalOperator.And, group.Operator);
-        Assert.Equal(2, group.Children.Count);
-        Assert.IsType<ConditionLeaf>(group.Children[0]);            // this row's own condition
-        var negation = Assert.IsType<ConditionGroup>(group.Children[1]);
-        Assert.Equal(LogicalOperator.Not, negation.Operator);       // NOT(row 0's own condition)
+        Assert.True(parsed.StopAfterFirstMatch);
+
+        // Row 1 is "VIP" with a wildcard total, so its condition is exactly its own single leaf -
+        // no negation of row 0 grafted on.
+        var leaf = Assert.IsType<ConditionLeaf>(parsed.Rules[1].Condition);
+        Assert.Equal("Customer.Tier", leaf.Field);
+
+        // Rows stay in document order via descending priority.
+        Assert.Equal(new[] { "shipping-0", "shipping-1", "shipping-2" }, parsed.Rules.Select(r => r.Id).ToArray());
+        Assert.True(parsed.Rules[0].Priority > parsed.Rules[1].Priority);
+    }
+
+    [Fact]
+    public void CollectPolicy_DoesNotStopAfterFirstMatch()
+        => Assert.False(Parse(ValidTable).StopAfterFirstMatch);
+
+    /// <summary>The row count no longer drives the condition-node count: expansion is linear.</summary>
+    [Fact]
+    public void FirstPolicy_ExpansionIsLinearInRowCount()
+    {
+        static int Nodes(ConditionNode n) => n is ConditionGroup g ? 1 + g.Children.Sum(Nodes) : 1;
+
+        static string Table(int rows)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.Append(@"{ ""decisionTable"": { ""hitPolicy"": ""first"", ""inputs"": [ { ""field"": ""A"" } ], ""outputs"": [ { ""target"": ""D"" } ], ""rows"": [");
+            for (int i = 0; i < rows; i++)
+            {
+                sb.Append(i > 0 ? "," : string.Empty).Append(@"{ ""when"": [").Append(i).Append(@"], ""then"": [").Append(i).Append("] }");
+            }
+
+            return sb.Append("] } }").ToString();
+        }
+
+        int small = Parse(Table(10)).Rules.Sum(r => Nodes(r.Condition));
+        int large = Parse(Table(100)).Rules.Sum(r => Nodes(r.Condition));
+
+        Assert.Equal(10, small);
+        Assert.Equal(100, large);   // was 5,050 under the negation-chain encoding
     }
 
     [Fact]
