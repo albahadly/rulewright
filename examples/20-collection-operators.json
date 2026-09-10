@@ -1,0 +1,70 @@
+{
+  "name": "Collection quantifiers",
+  "description": "Any / All / None test a nested condition against every element of a collection field, and count measures one. Field paths inside the condition resolve against the element; \"$\" is the element itself.",
+  "rules": [
+    {
+      "id": "restricted-item-present",
+      "description": "Any: at least one order line is a restricted category. Inexpressible with In/NotIn, which compare a single scalar against a set.",
+      "condition": {
+        "field": "Order.Lines",
+        "operator": "Any",
+        "condition": { "field": "Category", "operator": "In", "value": ["alcohol", "tobacco", "firearms"] }
+      },
+      "actions": [
+        { "type": "setOutput", "target": "AgeCheckRequired", "value": true },
+        { "type": "appendToOutput", "target": "Reasons", "value": "restricted-item" }
+      ]
+    },
+    {
+      "id": "everything-in-stock",
+      "description": "All: every line is available. Vacuously true for an empty collection, false when the field is null.",
+      "condition": {
+        "field": "Order.Lines",
+        "operator": "All",
+        "condition": { "field": "InStock", "operator": "Equals", "value": true }
+      },
+      "actions": [ { "type": "setOutput", "target": "ShipsImmediately", "value": true } ],
+      "else": [ { "type": "setOutput", "target": "ShipsImmediately", "value": false } ]
+    },
+    {
+      "id": "no-backorders",
+      "description": "None: the mirror of Any. An element condition is an ordinary condition tree, so groups nest inside it.",
+      "condition": {
+        "field": "Order.Lines",
+        "operator": "None",
+        "condition": {
+          "type": "group",
+          "operator": "AND",
+          "rules": [
+            { "field": "InStock", "operator": "Equals", "value": false },
+            { "field": "Quantity", "operator": "GreaterThan", "value": 0 }
+          ]
+        }
+      },
+      "actions": [ { "type": "appendToOutput", "target": "Reasons", "value": "no-backorders" } ]
+    },
+    {
+      "id": "priority-tag",
+      "description": "\"$\" is the element itself, which is how a collection of scalars is tested.",
+      "condition": {
+        "field": "Order.Tags",
+        "operator": "Any",
+        "condition": { "field": "$", "operator": "Equals", "value": "priority" }
+      },
+      "actions": [ { "type": "setOutput", "target": "Priority", "value": true } ]
+    },
+    {
+      "id": "bulk-order",
+      "description": "count measures a collection, so a size test goes through the ordinary computed left-hand side.",
+      "condition": {
+        "expression": { "op": "count", "operands": [ { "field": "Order.Lines" } ] },
+        "operator": "GreaterThan",
+        "value": 3
+      },
+      "actions": [
+        { "type": "setOutput", "target": "BulkOrder", "value": true },
+        { "type": "setOutput", "target": "LineCount", "value": { "op": "count", "operands": [ { "field": "Order.Lines" } ] } }
+      ]
+    }
+  ]
+}

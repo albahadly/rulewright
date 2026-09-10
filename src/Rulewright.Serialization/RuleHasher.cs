@@ -198,7 +198,15 @@ public static class RuleHasher
         builder.Append("\"operator\":");
         AppendString(builder, OperatorMap.ToJsonName(leaf.Operator));
 
-        if (leaf.Operator is not (ConditionOperator.IsNull or ConditionOperator.IsNotNull))
+        if (leaf.ElementCondition is not null)
+        {
+            // The per-element condition is the whole meaning of a quantifier, so it has to be part
+            // of the content hash — otherwise two quantifiers over the same field would share a
+            // compiled delegate.
+            builder.Append(",\"condition\":");
+            AppendCondition(builder, leaf.ElementCondition);
+        }
+        else if (leaf.Operator is not (ConditionOperator.IsNull or ConditionOperator.IsNotNull))
         {
             builder.Append(",\"value\":");
             AppendValue(builder, leaf.Value);

@@ -85,6 +85,13 @@ public class ExampleFilesTests
             ["ShippingCost"] = 5m,
             ["DiscountApplied"] = 10m,
             ["PlacedOn"] = new DateTime(2026, 7, 18),
+            ["Tags"] = new object?[] { "gift", "priority" },
+            ["Lines"] = new object?[]
+            {
+                new Dictionary<string, object?> { ["Category"] = "books", ["Quantity"] = 2L, ["InStock"] = true },
+                new Dictionary<string, object?> { ["Category"] = "alcohol", ["Quantity"] = 1L, ["InStock"] = true },
+                new Dictionary<string, object?> { ["Category"] = "stationery", ["Quantity"] = 3L, ["InStock"] = true },
+            },
         },
     };
 
@@ -116,6 +123,13 @@ public class ExampleFilesTests
             ShippingCost = 5m,
             DiscountApplied = 10m,
             PlacedOn = new DateTime(2026, 7, 18),
+            Tags = new[] { "gift", "priority" },
+            Lines = new List<ExampleLine>
+            {
+                new ExampleLine { Category = "books", Quantity = 2, InStock = true },
+                new ExampleLine { Category = "alcohol", Quantity = 1, InStock = true },
+                new ExampleLine { Category = "stationery", Quantity = 3, InStock = true },
+            },
         },
     };
 
@@ -165,6 +179,19 @@ public class ExampleFilesTests
 
         /// <summary>Absent from the dictionary fact too — exercises the null-path semantics.</summary>
         public decimal? InternationalPenalty { get; set; }
+
+        public string[]? Tags { get; set; }
+
+        public List<ExampleLine> Lines { get; set; } = new List<ExampleLine>();
+    }
+
+    private sealed class ExampleLine
+    {
+        public string? Category { get; set; }
+
+        public long Quantity { get; set; }
+
+        public bool InStock { get; set; }
     }
 
     private static string FindExamplesDirectory()

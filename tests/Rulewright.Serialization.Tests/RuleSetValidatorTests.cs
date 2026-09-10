@@ -272,4 +272,97 @@ public class RuleSetValidatorTests
             ""rules"": [ { ""id"": ""r"", ""condition"": { ""field"": ""A"", ""operator"": ""IsNull"" } } ] }");
         Assert.Contains(result.Errors, e => e.Message.Contains("not both"));
     }
+
+    // --- Collection quantifiers ---
+
+    /// <summary>A quantifier reads a collection from 'field' and tests each element with 'condition'.</summary>
+    [Fact]
+    public void Quantifier_WithFieldAndCondition_IsValid()
+    {
+        RuleSetValidationResult result = Validate(@"{ ""id"": ""r"", ""condition"": {
+            ""field"": ""Order.Lines"", ""operator"": ""Any"", ""condition"": {
+                ""type"": ""group"", ""operator"": ""AND"", ""rules"": [
+                  { ""field"": ""Category"", ""operator"": ""In"", ""value"": [""alcohol""] },
+                  { ""field"": ""Quantity"", ""operator"": ""GreaterThan"", ""value"": 1 } ] } } }");
+        Assert.True(result.IsValid, string.Join("; ", result.Errors.Select(e => e.Path + " " + e.Message)));
+    }
+
+    [Fact]
+    public void Quantifier_MissingCondition_IsReported()
+    {
+        RuleSetValidationResult result = Validate(
+            @"{ ""id"": ""r"", ""condition"": { ""field"": ""Order.Lines"", ""operator"": ""All"" } }");
+        Assert.Contains(result.Errors, e => e.Path == "/condition" && e.Message.Contains("'condition'"));
+    }
+
+    [Fact]
+    public void Quantifier_MissingField_IsReported()
+    {
+        RuleSetValidationResult result = Validate(@"{ ""id"": ""r"", ""condition"": {
+            ""operator"": ""Any"", ""condition"": { ""field"": ""$"", ""operator"": ""IsNotNull"" } } }");
+        Assert.Contains(result.Errors, e => e.Path == "/condition" && e.Message.Contains("'field'"));
+    }
+
+    /// <summary>A quantifier takes a nested condition, so a value or an expression is a mistake.</summary>
+    [Fact]
+    public void Quantifier_WithValueOrExpression_IsReported()
+    {
+        RuleSetValidationResult withValue = Validate(@"{ ""id"": ""r"", ""condition"": {
+            ""field"": ""Order.Lines"", ""operator"": ""None"", ""value"": 3,
+            ""condition"": { ""field"": ""$"", ""operator"": ""IsNotNull"" } } }");
+        Assert.Contains(withValue.Errors, e => e.Path == "/condition/value");
+
+        RuleSetValidationResult withExpression = Validate(@"{ ""id"": ""r"", ""condition"": {
+            ""expression"": { ""field"": ""Order.Lines"" }, ""operator"": ""Any"",
+            ""condition"": { ""field"": ""$"", ""operator"": ""IsNotNull"" } } }");
+        Assert.Contains(withExpression.Errors, e => e.Path == "/condition/expression");
+    }
+
+    /// <summary>Errors inside the element condition carry their own pointer, nested under it.</summary>
+    [Fact]
+    public void Quantifier_ReportsErrorsInsideTheElementCondition()
+    {
+        RuleSetValidationResult result = Validate(@"{ ""id"": ""r"", ""condition"": {
+            ""field"": ""Order.Lines"", ""operator"": ""Any"",
+            ""condition"": { ""field"": ""Category"", ""operator"": ""In"", ""value"": ""alcohol"" } } }");
+        Assert.Contains(result.Errors, e => e.Path == "/condition/condition/value");
+    }
+
+    /// <summary>
+    /// "$" is the element a quantifier is testing, so it means nothing outside one. The rest of the
+    /// "$" prefix is reserved, so a path like "$root.X" is rejected rather than silently treated as
+    /// an ordinary member name.
+    /// </summary>
+    [Fact]
+    public void ElementSelfPath_IsOnlyValidInsideAQuantifier()
+    {
+        RuleSetValidationResult inside = Validate(@"{ ""id"": ""r"", ""condition"": {
+            ""field"": ""Tags"", ""operator"": ""Any"",
+            ""condition"": { ""field"": ""$"", ""operator"": ""Equals"", ""value"": ""vip"" } } }");
+        Assert.True(inside.IsValid, string.Join("; ", inside.Errors.Select(e => e.Path + " " + e.Message)));
+
+        RuleSetValidationResult outside = Validate(
+            @"{ ""id"": ""r"", ""condition"": { ""field"": ""$"", ""operator"": ""IsNotNull"" } }");
+        Assert.Contains(outside.Errors, e => e.Path == "/condition/field");
+
+        RuleSetValidationResult reserved = Validate(@"{ ""id"": ""r"", ""condition"": {
+            ""field"": ""Tags"", ""operator"": ""Any"",
+            ""condition"": { ""field"": ""$root.Total"", ""operator"": ""IsNotNull"" } } }");
+        Assert.Contains(reserved.Errors, e => e.Path == "/condition/condition/field" && e.Message.Contains("reserved"));
+    }
+
+    /// <summary>count takes exactly one operand — the collection to measure.</summary>
+    [Fact]
+    public void Count_RequiresExactlyOneOperand()
+    {
+        RuleSetValidationResult ok = Validate(@"{ ""id"": ""r"", ""condition"": {
+            ""expression"": { ""op"": ""count"", ""operands"": [ { ""field"": ""Order.Lines"" } ] },
+            ""operator"": ""GreaterThan"", ""value"": 3 } }");
+        Assert.True(ok.IsValid, string.Join("; ", ok.Errors.Select(e => e.Path + " " + e.Message)));
+
+        RuleSetValidationResult two = Validate(@"{ ""id"": ""r"", ""condition"": {
+            ""expression"": { ""op"": ""count"", ""operands"": [ { ""field"": ""A"" }, { ""field"": ""B"" } ] },
+            ""operator"": ""GreaterThan"", ""value"": 3 } }");
+        Assert.Contains(two.Errors, e => e.Path == "/condition/expression/operands");
+    }
 }

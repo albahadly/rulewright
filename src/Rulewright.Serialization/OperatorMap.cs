@@ -28,6 +28,9 @@ internal static class OperatorMap
             ["IsNull"] = ConditionOperator.IsNull,
             ["IsNotNull"] = ConditionOperator.IsNotNull,
             ["custom"] = ConditionOperator.Custom,
+            ["Any"] = ConditionOperator.Any,
+            ["All"] = ConditionOperator.All,
+            ["None"] = ConditionOperator.None,
         };
 
     private static readonly Dictionary<ConditionOperator, string> ToJson = BuildReverse();

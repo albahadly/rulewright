@@ -31,4 +31,11 @@ public enum ExpressionOperator
 
     /// <summary>The first non-null operand, or null if all operands are null.</summary>
     Coalesce,
+
+    /// <summary>
+    /// The number of elements in a single collection operand, as a <see cref="long"/>. Null when
+    /// the operand is null or is not a collection; a string is text, not a collection of
+    /// characters.
+    /// </summary>
+    Count,
 }

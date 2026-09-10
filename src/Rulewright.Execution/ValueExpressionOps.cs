@@ -84,6 +84,37 @@ internal static class ValueExpressionOps
         return null;
     }
 
+    /// <summary>
+    /// The element count of a collection operand, as a <see cref="long"/>. Null for a null or
+    /// non-collection operand, so the operator stays total. A string is text, not a collection of
+    /// characters — counting its characters is never what a rule author meant by <c>count</c>.
+    /// </summary>
+    internal static object? Count(object? value)
+    {
+        if (value is null or string)
+        {
+            return null;
+        }
+
+        if (value is System.Collections.ICollection sized)
+        {
+            return (long)sized.Count;
+        }
+
+        if (value is not System.Collections.IEnumerable items)
+        {
+            return null;
+        }
+
+        long count = 0;
+        foreach (object? _ in items)
+        {
+            count++;
+        }
+
+        return count;
+    }
+
     private static object? Arithmetic(
         object? a,
         object? b,

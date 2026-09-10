@@ -65,16 +65,22 @@ public static class RuleSchemaCatalog
                 ConditionOperator.Contains or ConditionOperator.StartsWith
                     or ConditionOperator.EndsWith or ConditionOperator.MatchesRegex => OperatorValueKind.Text,
                 ConditionOperator.Custom => OperatorValueKind.Custom,
+                ConditionOperator.Any or ConditionOperator.All
+                    or ConditionOperator.None => OperatorValueKind.Condition,
                 _ => OperatorValueKind.Scalar,
             };
 
             bool custom = @operator == ConditionOperator.Custom;
+
+            // A quantifier reads its collection from a dotted field path, so there is no computed
+            // left-hand side to offer either.
+            bool fieldOnly = custom || ConditionLeaf.IsQuantifier(@operator);
             list.Add(new ConditionOperatorInfo(
                 @operator,
                 OperatorMap.ToJsonName(@operator),
                 kind,
                 requiresFunctionName: custom,
-                allowsExpressionLeft: !custom));
+                allowsExpressionLeft: !fieldOnly));
         }
 
         return new ReadOnlyCollection<ConditionOperatorInfo>(list);
@@ -99,6 +105,7 @@ public static class RuleSchemaCatalog
             {
                 ExpressionOperator.Concat => ExpressionOperatorCategory.Text,
                 ExpressionOperator.Coalesce => ExpressionOperatorCategory.NullHandling,
+                ExpressionOperator.Count => ExpressionOperatorCategory.Collection,
                 _ => ExpressionOperatorCategory.Arithmetic,
             };
 

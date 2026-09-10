@@ -85,6 +85,20 @@ Rulewright.Json.NewtonsoftJson ┤ (adapters: JSON text → neutral DOM)
   thread on consumer-supplied data.
 - **`In`/`NotIn`** build a typed `HashSet<T>` once at compile time and emit a
   `Contains` call.
+- **Quantifiers (`Any`/`All`/`None`)** navigate to the collection field keeping its *static*
+  type (`NavigateTyped`, unlike the value navigator which boxes to `object`), read the element
+  type off its `IEnumerable<T>`, compile the per-element condition against that element type
+  through the same `BuildNode` used for a rule's own condition, and emit
+  `Enumerable.Any`/`All`. Member access inside the loop is therefore as reflection-free as
+  anywhere else, and every operator, group, and nested quantifier works there. When the static
+  type says nothing (an `object`-typed member, or a non-generic `IEnumerable`), the leaf falls
+  back to the shared `RuleInterpreter.ApplyOperator` — the same escape hatch object-typed fields
+  use — so both paths still agree. A null collection takes the ordinary null semantics (false for
+  `Any`/`All`, true for `None`); an *empty* one is a collection, so `All` and `None` are
+  vacuously true. A string is text, never a collection of characters.
+- **Tracing a quantifier.** Per-element results have no single slot in the `bool?[]`, so a
+  quantifier is one node whose element condition is rendered into its description. It contributes
+  no children to the node layout, which is why `ConditionNodeIndexer` walks only group children.
 - **Custom functions** are looked up in the registry at compile time and embedded as
   constants — the compiled delegate calls `IRuleFunction.Evaluate` directly, no
   per-evaluation name resolution.

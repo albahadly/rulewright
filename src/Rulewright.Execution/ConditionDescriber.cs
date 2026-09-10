@@ -11,16 +11,25 @@ namespace Rulewright.Execution;
 /// </summary>
 internal static class ConditionDescriber
 {
-    internal static string Describe(ConditionNode node)
+    internal static string Describe(ConditionNode node) => Describe(node, nested: false);
+
+    private static string Describe(ConditionNode node, bool nested)
     {
         if (node is ConditionGroup group)
         {
-            return group.Operator switch
+            string name = group.Operator switch
             {
                 LogicalOperator.And => "AND",
                 LogicalOperator.Or => "OR",
                 _ => "NOT",
             };
+
+            // At the top level a group is its own trace node with its children beneath it, so the
+            // combinator alone is the whole description. Nested inside a quantifier there are no
+            // child nodes to show, so spell the group out.
+            return nested
+                ? name + "(" + string.Join(", ", group.Children.Select(child => Describe(child, nested: true))) + ")"
+                : name;
         }
 
         var leaf = (ConditionLeaf)node;
@@ -30,6 +39,10 @@ internal static class ConditionDescriber
         string field = leaf.Left is not null ? Describe(leaf.Left) : leaf.Field ?? "(fact)";
         return leaf.Operator switch
         {
+            // A quantifier is one trace node, so its per-element condition is rendered inline here
+            // rather than traced separately - per-element results have no single slot to live in.
+            ConditionOperator.Any or ConditionOperator.All or ConditionOperator.None =>
+                $"{field} {leaf.Operator} ({Describe(leaf.ElementCondition!, nested: true)})",
             ConditionOperator.Custom => $"{field} custom:{leaf.FunctionName}",
             ConditionOperator.IsNull => $"{field} IsNull",
             ConditionOperator.IsNotNull => $"{field} IsNotNull",

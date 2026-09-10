@@ -47,6 +47,10 @@ internal static class RuleExpressionCompiler
     private static readonly MethodInfo NegateMethod = ValueOp(nameof(ValueExpressionOps.Negate));
     private static readonly MethodInfo ConcatMethod = ValueOp(nameof(ValueExpressionOps.Concat));
     private static readonly MethodInfo CoalesceMethod = ValueOp(nameof(ValueExpressionOps.Coalesce));
+    private static readonly MethodInfo CountMethod = ValueOp(nameof(ValueExpressionOps.Count));
+
+    private static readonly MethodInfo EnumerableAnyMethod = EnumerableQuantifier(nameof(System.Linq.Enumerable.Any));
+    private static readonly MethodInfo EnumerableAllMethod = EnumerableQuantifier(nameof(System.Linq.Enumerable.All));
 
     internal static CompiledRule<TFact> Compile<TFact>(
         Rule rule,
@@ -169,6 +173,9 @@ internal static class RuleExpressionCompiler
             case ExpressionOperator.Negate:
                 return Expression.Call(NegateMethod, BuildValueExpression(op.Operands[0], fact, rule));
 
+            case ExpressionOperator.Count:
+                return Expression.Call(CountMethod, BuildValueExpression(op.Operands[0], fact, rule));
+
             case ExpressionOperator.Concat:
                 return Expression.Call(ConcatMethod, OperandArray(op.Operands, fact, rule));
 
@@ -211,6 +218,11 @@ internal static class RuleExpressionCompiler
         string path,
         Rule rule)
     {
+        if (isRoot && segments.Length == 1 && segments[0] == ConditionLeaf.ElementSelfPath)
+        {
+            return current.Type == typeof(object) ? current : Expression.Convert(current, typeof(object));
+        }
+
         Type type = current.Type;
 
         if (Nullable.GetUnderlyingType(type) is not null)
@@ -259,6 +271,20 @@ internal static class RuleExpressionCompiler
     private static MethodInfo ValueOp(string name)
         => typeof(ValueExpressionOps).GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic)!;
 
+    /// <summary>The two-argument (sequence, predicate) overload of an Enumerable quantifier.</summary>
+    private static MethodInfo EnumerableQuantifier(string name)
+    {
+        foreach (MethodInfo method in typeof(System.Linq.Enumerable).GetMethods(BindingFlags.Static | BindingFlags.Public))
+        {
+            if (method.Name == name && method.GetParameters().Length == 2)
+            {
+                return method;
+            }
+        }
+
+        throw new InvalidOperationException($"Enumerable.{name}(source, predicate) was not found.");
+    }
+
     private sealed class Context
     {
         internal Context(
@@ -266,7 +292,7 @@ internal static class RuleExpressionCompiler
             IReadOnlyDictionary<string, IRuleFunction> functions,
             TimeSpan regexTimeout,
             ParameterExpression? results,
-            int[] nodeLayout)
+            int[]? nodeLayout)
         {
             Rule = rule;
             Functions = functions;
@@ -284,7 +310,7 @@ internal static class RuleExpressionCompiler
         internal ParameterExpression? Results { get; }
 
         /// <summary>Pre-order subtree sizes; see <see cref="ConditionNodeIndexer"/>.</summary>
-        internal int[] NodeLayout { get; }
+        internal int[]? NodeLayout { get; }
     }
 
     /// <summary>
@@ -323,7 +349,11 @@ internal static class RuleExpressionCompiler
         Expression combined = BuildNode(group.Children[0], childIndex, fact, context);
         for (int i = 1; i < group.Children.Count; i++)
         {
-            childIndex += context.NodeLayout[childIndex];
+            if (context.Results is not null)
+            {
+                childIndex += context.NodeLayout![childIndex];
+            }
+
             Expression child = BuildNode(group.Children[i], childIndex, fact, context);
             combined = group.Operator == LogicalOperator.And
                 ? Expression.AndAlso(combined, child)
@@ -347,6 +377,17 @@ internal static class RuleExpressionCompiler
         {
             // Field-less custom condition: the function receives the whole fact.
             return CallFunction(leaf, Expression.Convert(fact, typeof(object)), context);
+        }
+
+        if (ConditionLeaf.IsQuantifier(leaf.Operator))
+        {
+            return BuildQuantifier(leaf, fact, context);
+        }
+
+        if (leaf.Field == ConditionLeaf.ElementSelfPath)
+        {
+            // "$" is the value in scope itself - the element a quantifier is testing.
+            return BuildComparison(fact, leaf, context);
         }
 
         string[] segments = leaf.Field.Split('.');
@@ -406,6 +447,152 @@ internal static class RuleExpressionCompiler
         }
 
         return inner;
+    }
+
+    /// <summary>
+    /// Compiles a quantifier into a typed <c>Enumerable.Any</c>/<c>All</c> over the collection's
+    /// element type, with the per-element condition compiled against that element exactly as a
+    /// rule's own condition is compiled against the fact — so member access inside the loop stays
+    /// reflection-free and every operator, group, and nested quantifier works there too.
+    ///
+    /// <para>The element condition is built with a untraced context: per-element results have no
+    /// single slot to live in, so a quantifier is one node in a trace and its inner condition is
+    /// rendered into that node's description instead.</para>
+    /// </summary>
+    private static Expression BuildQuantifier(ConditionLeaf leaf, ParameterExpression fact, Context context)
+    {
+        // Navigated with its static type intact, not boxed to object: the whole point is to learn
+        // the element type at compile time so member access inside the loop stays reflection-free.
+        Expression collection = leaf.Field == ConditionLeaf.ElementSelfPath
+            ? (Expression)fact
+            : NavigateTyped(fact, leaf.Field!.Split('.'), 0, isRoot: true, leaf.Field, context.Rule);
+
+        // A string is text, not a collection of characters, even though it is IEnumerable<char>.
+        if (collection.Type == typeof(string))
+        {
+            return Expression.Constant(leaf.Operator == ConditionOperator.None);
+        }
+
+        Type elementType = GetElementType(collection.Type);
+        Type sequenceType = typeof(IEnumerable<>).MakeGenericType(elementType);
+
+        if (!sequenceType.IsAssignableFrom(collection.Type))
+        {
+            // The field's static type says nothing about what it holds (an object-typed member, or
+            // a non-generic IEnumerable). Defer to the shared runtime evaluator, exactly as an
+            // object-typed field does, so both paths still answer identically.
+            return ApplySharedOperator(leaf, Expression.Convert(collection, typeof(object)), context);
+        }
+
+        ParameterExpression element = Expression.Parameter(elementType, "element");
+        var elementContext = new Context(context.Rule, context.Functions, context.RegexTimeout, null, null);
+        LambdaExpression predicate = Expression.Lambda(
+            typeof(Func<,>).MakeGenericType(elementType, typeof(bool)),
+            BuildNode(leaf.ElementCondition!, 0, element, elementContext),
+            element);
+
+        MethodInfo quantify = (leaf.Operator == ConditionOperator.All ? EnumerableAllMethod : EnumerableAnyMethod)
+            .MakeGenericMethod(elementType);
+        Expression call = Expression.Call(quantify, Expression.Convert(collection, sequenceType), predicate);
+        if (leaf.Operator == ConditionOperator.None)
+        {
+            call = Expression.Not(call);
+        }
+
+        if (collection.Type.IsValueType)
+        {
+            return call;
+        }
+
+        // A null collection is the field's absence, so it takes the ordinary null semantics:
+        // false for Any and All, true for None, matching NotIn and the interpreter.
+        return Expression.Condition(
+            Expression.NotEqual(collection, Expression.Constant(null, collection.Type)),
+            call,
+            Expression.Constant(leaf.Operator == ConditionOperator.None));
+    }
+
+    /// <summary>
+    /// Navigates a field path the way <see cref="Navigate"/> does but yields the member's own CLR
+    /// type rather than folding into a comparison or boxing to <c>object</c>. A null link
+    /// short-circuits to that type's default, which for the reference types collections actually
+    /// are is null — and the caller turns that into the operator's null semantics.
+    /// </summary>
+    private static Expression NavigateTyped(
+        Expression current, string[] segments, int segmentIndex, bool isRoot, string path, Rule rule)
+    {
+        Type type = current.Type;
+
+        if (Nullable.GetUnderlyingType(type) is not null)
+        {
+            Expression unwrapped = NavigateTyped(
+                Expression.Property(current, "Value"), segments, segmentIndex, isRoot: false, path, rule);
+            return Expression.Condition(
+                Expression.Property(current, "HasValue"), unwrapped, Expression.Default(unwrapped.Type));
+        }
+
+        if (segmentIndex == segments.Length)
+        {
+            return current;
+        }
+
+        MemberExpression member;
+        try
+        {
+            member = Expression.PropertyOrField(current, segments[segmentIndex]);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new RuleCompilationException(
+                rule.Id,
+                $"field path '{path}': member '{segments[segmentIndex]}' was not found on type {type.FullName}.",
+                ex);
+        }
+
+        ParameterExpression variable = Expression.Variable(
+            member.Type, "c" + segmentIndex.ToString(CultureInfo.InvariantCulture));
+        Expression inner = Expression.Block(
+            new[] { variable },
+            Expression.Assign(variable, member),
+            NavigateTyped(variable, segments, segmentIndex + 1, isRoot: false, path, rule));
+
+        if (!type.IsValueType && !isRoot)
+        {
+            return Expression.Condition(
+                Expression.NotEqual(current, Expression.Constant(null, type)),
+                inner,
+                Expression.Default(inner.Type));
+        }
+
+        return inner;
+    }
+
+    /// <summary>
+    /// The element type a collection yields: the <c>T</c> of its <see cref="IEnumerable{T}"/>, or
+    /// <see cref="object"/> for a bare <see cref="System.Collections.IEnumerable"/> or an
+    /// <c>object</c>-typed field whose shape is only known at runtime.
+    /// </summary>
+    private static Type GetElementType(Type collectionType)
+    {
+        if (collectionType.IsArray)
+        {
+            return collectionType.GetElementType()!;
+        }
+
+        if (collectionType.IsGenericType && collectionType.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+        {
+            return collectionType.GetGenericArguments()[0];
+        }
+
+        foreach (Type contract in collectionType.GetInterfaces())
+        {
+            if (contract.IsGenericType && contract.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            {
+                return contract.GetGenericArguments()[0];
+            }
+        }
+
+        return typeof(object);
     }
 
     private static Expression NullFallback(ConditionLeaf leaf, Context context) => leaf.Operator switch

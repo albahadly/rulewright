@@ -37,7 +37,7 @@ internal static class RuleInterpreter
         IReadOnlyDictionary<string, IRuleFunction> functions,
         TimeSpan regexTimeout,
         bool?[]? results,
-        int[] layout)
+        int[]? layout)
     {
         bool outcome;
         if (node is ConditionGroup group)
@@ -56,7 +56,10 @@ internal static class RuleInterpreter
                             break;
                         }
 
-                        childIndex += layout[childIndex];
+                        if (results is not null)
+                        {
+                            childIndex += layout![childIndex];
+                        }
                     }
 
                     break;
@@ -74,7 +77,10 @@ internal static class RuleInterpreter
                             break;
                         }
 
-                        childIndex += layout[childIndex];
+                        if (results is not null)
+                        {
+                            childIndex += layout![childIndex];
+                        }
                     }
 
                     break;
@@ -124,6 +130,11 @@ internal static class RuleInterpreter
     {
         switch (leaf.Operator)
         {
+            case ConditionOperator.Any:
+            case ConditionOperator.All:
+            case ConditionOperator.None:
+                return Quantify(leaf, fieldValue, functions, regexTimeout);
+
             case ConditionOperator.IsNull:
                 return fieldValue is null;
 
@@ -174,6 +185,45 @@ internal static class RuleInterpreter
     }
 
     /// <summary>
+    /// Applies a quantifier to a resolved collection. A null collection is a field's absence, so it
+    /// follows the ordinary null semantics — false for <c>Any</c> and <c>All</c>, true for
+    /// <c>None</c>, exactly as <c>In</c> and <c>NotIn</c> behave. An <em>empty</em> collection is a
+    /// collection, so <c>All</c> and <c>None</c> are vacuously true over it. A string is text, not
+    /// a collection of characters.
+    /// </summary>
+    private static bool Quantify(
+        ConditionLeaf leaf,
+        object? collection,
+        IReadOnlyDictionary<string, IRuleFunction> functions,
+        TimeSpan regexTimeout)
+    {
+        if (collection is null or string || collection is not System.Collections.IEnumerable items)
+        {
+            return leaf.Operator == ConditionOperator.None;
+        }
+
+        foreach (object? element in items)
+        {
+            // A null element still gets walked, so "$" comparisons and IsNull see it.
+            bool matched = Evaluate(
+                leaf.ElementCondition!, 0, element!, functions, regexTimeout, results: null, layout: null);
+
+            switch (leaf.Operator)
+            {
+                case ConditionOperator.Any when matched:
+                    return true;
+                case ConditionOperator.All when !matched:
+                    return false;
+                case ConditionOperator.None when matched:
+                    return false;
+            }
+        }
+
+        // Exhausted without deciding: Any found no match, All found no failure, None found no match.
+        return leaf.Operator != ConditionOperator.Any;
+    }
+
+    /// <summary>
     /// Set membership, matching the compiled path's typed <c>HashSet</c> exactly: a null in the set
     /// contributes nothing. Null is a field's absence, not a member — so a null field is in no set,
     /// which is what the documented null semantics say (<c>In</c> false, <c>NotIn</c> true) and what
@@ -194,6 +244,11 @@ internal static class RuleInterpreter
 
     internal static object? ResolvePath(object fact, string path)
     {
+        if (path == ConditionLeaf.ElementSelfPath)
+        {
+            return fact;
+        }
+
         object? current = fact;
         foreach (string segment in path.Split('.'))
         {

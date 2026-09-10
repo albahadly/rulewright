@@ -55,6 +55,9 @@ internal static class ActionExpressionInterpreter
             case ExpressionOperator.Negate:
                 return ValueExpressionOps.Negate(EvaluateValue(operands[0], fact));
 
+            case ExpressionOperator.Count:
+                return ValueExpressionOps.Count(EvaluateValue(operands[0], fact));
+
             case ExpressionOperator.Concat:
                 return ValueExpressionOps.Concat(EvaluateAll(operands, fact));
 

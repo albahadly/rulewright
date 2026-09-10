@@ -143,9 +143,25 @@ strong-named, and ship symbols (`.snupkg`) with Source Link.
 
 Comparison `Equals`, `NotEquals`, `GreaterThan`, `GreaterThanOrEqual`, `LessThan`,
 `LessThanOrEqual` · String (ordinal) `Contains`, `StartsWith`, `EndsWith`,
-`MatchesRegex` · Collection `In`, `NotIn` · Null `IsNull`, `IsNotNull` · Logical
+`MatchesRegex` · Set membership `In`, `NotIn` · Collection quantifiers `Any`, `All`,
+`None` (each takes a per-element `condition`) · Null `IsNull`, `IsNotNull` · Logical
 `AND`, `OR`, `NOT` · Extensible `custom` + `name`, resolved against functions
 registered on the builder **at compile time**.
+
+`In`/`NotIn` compare one scalar against a closed set; a **quantifier** reasons about a
+collection field, applying a nested condition to each element:
+
+```json
+{ "field": "Order.Lines", "operator": "Any",
+  "condition": { "field": "Category", "operator": "In", "value": ["alcohol", "tobacco"] } }
+```
+
+The element condition is an ordinary condition tree — groups, nested quantifiers and
+computed expressions all work inside it — and `"$"` names the element itself, which is
+how a collection of scalars is tested. `count` measures a collection through the usual
+computed left-hand side. See
+[usage.md](usage.md#5a-collections-any-all-none-count) and
+[examples/20-collection-operators.json](examples/20-collection-operators.json).
 
 For the `custom` operator, `Rulewright.Extensions.Functions` ships a curated catalog of
 ready-made predicates and helpers to register them:
@@ -418,6 +434,9 @@ Called out explicitly so expectations are clear:
 
 - **No forward-chaining / RETE-style inference.** One fact set in, one result out —
   stateless, single-pass evaluation. Rule outputs never feed other rules' inputs.
+- **No correlated collection conditions.** A quantifier's element condition sees the
+  element, not the root fact, so "any line whose price exceeds the order average" is not
+  expressible. The `$` path prefix is reserved for adding this later.
 - **No persistence layer.** Storing rule JSON is your application's concern; this
   library parses, validates, compiles, and executes.
 - **No UI in v1.** The Blazor rule builder (`Rulewright.Sample.BlazorBuilder`, v3) is a

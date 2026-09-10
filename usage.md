@@ -10,6 +10,7 @@ see [README.md](README.md) and [docs/architecture.md](docs/architecture.md).
 - [3. Conditions](#3-conditions)
 - [4. Actions: writing outputs](#4-actions-writing-outputs)
 - [5. Computed values](#5-computed-values)
+- [5a. Collections: Any, All, None, count](#5a-collections-any-all-none-count)
 - [6. Rule sets, priority, and else](#6-rule-sets-priority-and-else)
 - [7. Decision tables](#7-decision-tables)
 - [8. Custom functions](#8-custom-functions)
@@ -163,6 +164,7 @@ Every operator, and the operand each one takes:
 | `Contains`, `StartsWith`, `EndsWith` | string | Ordinal |
 | `MatchesRegex` | string | Time-bounded — see [§15](#15-behaviour-worth-knowing) |
 | `In`, `NotIn` | non-empty array of scalars | Membership of the field in a closed set |
+| `Any`, `All`, `None` | *none* — takes `condition` | Quantify over a collection field; see [§5a](#5a-collections-any-all-none-count) |
 | `IsNull`, `IsNotNull` | *omitted* | True if any segment of the path is null |
 | `custom` + `name` | whatever the function expects | See [§8](#8-custom-functions) |
 
@@ -233,6 +235,7 @@ generate them and a reviewer can diff them:
 | Operator | Operands | Result |
 |---|---|---|
 | `add`, `multiply` | 2 or more | Numeric |
+| `count` | exactly 1 | Element count of a collection; null for a non-collection |
 | `subtract`, `divide`, `modulo` | exactly 2 | Numeric; divide/modulo by zero yields `null` |
 | `negate` | exactly 1 | Numeric |
 | `concat` | 2 or more | String; **`null` if any operand is null** |
@@ -253,6 +256,91 @@ The same expressions work on the **left-hand side of a condition**:
 ```
 
 That reads *average item price > 25*. A leaf uses `field` **or** `expression`, never both.
+
+## 5a. Collections: Any, All, None, count
+
+`In`/`NotIn` compare a single scalar against a set. To reason about a *collection* field — order
+lines, tags, payments — use a quantifier. `field` names the collection and `condition` is applied
+to each element:
+
+```json
+{
+  "field": "Order.Lines",
+  "operator": "Any",
+  "condition": {
+    "type": "group",
+    "operator": "AND",
+    "rules": [
+      { "field": "Category", "operator": "In", "value": ["alcohol", "tobacco"] },
+      { "field": "Quantity", "operator": "GreaterThan", "value": 1 }
+    ]
+  }
+}
+```
+
+That reads *any order line is a restricted category with quantity above one*.
+
+| Operator | True when | Empty collection | Null field |
+|---|---|---|---|
+| `Any` | at least one element matches | `false` | `false` |
+| `All` | every element matches | `true` (vacuously) | `false` |
+| `None` | no element matches | `true` (vacuously) | `true` |
+
+A null collection is the field's *absence*, so it follows the same null semantics as everything
+else — `None` is true for it exactly as `NotIn` is. An **empty** collection is a collection, so
+`All` and `None` are vacuously true over it. That distinction is deliberate: "there is no basket"
+and "the basket is empty" are different facts.
+
+The `condition` is an ordinary condition tree — groups, nested quantifiers, computed expressions,
+`custom` functions all work inside it. Its field paths resolve against the **element**, not the
+root fact.
+
+### `"$"` — the element itself
+
+For a collection of scalars there is no member to name, so `"$"` means the element being tested:
+
+```json
+{ "field": "Order.Tags", "operator": "Any",
+  "condition": { "field": "$", "operator": "Equals", "value": "priority" } }
+```
+
+`$` is only valid inside a quantifier's `condition`, and the whole `$` prefix is reserved, so
+`$root.Total` is rejected rather than read as a member called `$root`. That leaves room to add
+correlated conditions later without breaking documents.
+
+> **Not in this version:** the element condition cannot reach back to the root fact, so "any line
+> whose price exceeds the order's average" is not yet expressible.
+
+### Counting
+
+`count` measures a collection, so a size test goes through the ordinary computed left-hand side:
+
+```json
+{
+  "expression": { "op": "count", "operands": [ { "field": "Order.Lines" } ] },
+  "operator": "GreaterThan",
+  "value": 3
+}
+```
+
+It works in an action's value too (`"target": "LineCount"`). Like every expression operator it is
+total: a null, a non-collection, or a string yields `null` rather than an error — a string is
+text, not a collection of characters, for both `count` and the quantifiers.
+
+Counting only the *matching* elements ("more than three alcohol lines") is a follow-up; today you
+would add a `custom` function for it.
+
+### C# equivalent
+
+Quantifiers are a factory rather than a constructor, so existing `ConditionLeaf` calls are
+untouched:
+
+```csharp
+ConditionLeaf leaf = ConditionLeaf.Quantifier(
+    "Order.Lines",
+    ConditionOperator.Any,
+    new ConditionLeaf("Category", ConditionOperator.Equal, "alcohol"));
+```
 
 ## 6. Rule sets, priority, and else
 
@@ -591,6 +679,11 @@ thread:
 ```csharp
 .UseRegexTimeout(TimeSpan.FromMilliseconds(250))
 ```
+
+**A quantifier is one node in a trace.** Per-element results have no single slot to live in, so
+the element condition is rendered into the node's description
+(`Lines Any (AND(Category Equals "alcohol", Quantity GreaterThan 0))`) rather than traced
+separately.
 
 **Evaluation is stateless and single-pass.** One fact in, one result out. Rule outputs never feed
 other rules' conditions — there is no forward chaining, by design.

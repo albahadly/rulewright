@@ -303,6 +303,13 @@ public static class RuleSetParser
             ? nameValue.GetString()
             : null;
 
+        // A quantifier reads a collection from 'field' and applies a nested condition per element.
+        if (ConditionLeaf.IsQuantifier(@operator))
+        {
+            condition.TryGetProperty("condition", out RuleJsonValue elementCondition);
+            return ConditionLeaf.Quantifier(field!, @operator, ParseCondition(elementCondition));
+        }
+
         object? value = null;
         if (condition.TryGetProperty("value", out RuleJsonValue operand))
         {

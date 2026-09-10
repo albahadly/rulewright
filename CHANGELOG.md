@@ -5,6 +5,36 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0, breaking changes may land
 in a minor version; each one is called out below.
 
+## [Unreleased]
+
+### Added
+
+- **Collection quantifiers `Any`, `All`, `None`.** `In`/`NotIn` compare one scalar against a
+  closed set; a quantifier reasons about a collection field, applying a nested `condition` to each
+  element. The element condition is an ordinary condition tree, so groups, nested quantifiers,
+  computed expressions and `custom` functions all work inside it. The compiled path reads the
+  element type off the collection's `IEnumerable<T>` and emits a typed `Enumerable.Any`/`All`, so
+  member access inside the loop stays reflection-free.
+- **`"$"` names the element** a quantifier is currently testing, which is how a collection of
+  scalars is tested. It is valid only inside a quantifier's `condition`, and the whole `$` prefix
+  is now **reserved** — a path like `$root.Total` is rejected rather than read as a member named
+  `$root`. That leaves room for correlated conditions later without a breaking change.
+- **`count` expression operator**, measuring a collection through the existing computed
+  left-hand side (`count(Order.Lines) > 3`) or in an action's value. Total, like every other
+  expression operator: a null, a non-collection, or a string yields null.
+- `ConditionLeaf.Quantifier(...)` factory and `ConditionLeaf.ElementCondition`;
+  `OperatorValueKind.Condition` and `ConditionOperatorInfo.RequiresElementCondition` so an
+  authoring UI knows to offer a condition editor; `ExpressionOperatorCategory.Collection`.
+- [examples/20-collection-operators.json](examples/20-collection-operators.json).
+
+### Known limits
+
+- A quantifier's element condition sees the element, not the root fact, so correlated conditions
+  ("any line whose price exceeds the order average") are not yet expressible.
+- Counting only the matching elements is a follow-up; `count` measures the whole collection.
+- A quantifier is one node in a trace — per-element results have no single slot — so its element
+  condition is rendered into the node's description rather than traced separately.
+
 ## [0.2.0]
 
 ### Fixed

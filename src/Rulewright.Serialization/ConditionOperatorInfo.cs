@@ -22,6 +22,12 @@ public enum OperatorValueKind
 
     /// <summary>An optional value whose meaning is defined by a named function (<c>custom</c>).</summary>
     Custom,
+
+    /// <summary>
+    /// No value at all, but a nested per-element <c>condition</c> instead (<c>Any</c>, <c>All</c>,
+    /// <c>None</c>). An authoring UI should offer a condition editor here, not a value editor.
+    /// </summary>
+    Condition,
 }
 
 /// <summary>
@@ -65,7 +71,13 @@ public sealed class ConditionOperatorInfo
 
     /// <summary>
     /// Whether the left-hand side may be a computed <c>expression</c> rather than only a
-    /// <c>field</c> (true for every operator except <c>custom</c>).
+    /// <c>field</c> (true for every operator except <c>custom</c> and the quantifiers).
     /// </summary>
     public bool AllowsExpressionLeft { get; }
+
+    /// <summary>
+    /// Whether the operator quantifies over a collection and therefore requires a nested
+    /// per-element <c>condition</c> (<c>Any</c>, <c>All</c>, <c>None</c>).
+    /// </summary>
+    public bool RequiresElementCondition => ValueKind == OperatorValueKind.Condition;
 }

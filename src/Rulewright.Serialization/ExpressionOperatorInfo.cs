@@ -13,6 +13,9 @@ public enum ExpressionOperatorCategory
 
     /// <summary>Null handling (<c>coalesce</c>).</summary>
     NullHandling,
+
+    /// <summary>Collections (<c>count</c>).</summary>
+    Collection,
 }
 
 /// <summary>

@@ -63,7 +63,7 @@ public static class RuleSetValidator
     private static readonly string[] RuleSetProperties = { "name", "description", "rules" };
     private static readonly string[] RuleProperties = { "id", "description", "priority", "enabled", "condition", "actions", "else", "layout" };
     private static readonly string[] GroupProperties = { "type", "operator", "rules" };
-    private static readonly string[] LeafProperties = { "field", "expression", "operator", "value", "name" };
+    private static readonly string[] LeafProperties = { "field", "expression", "operator", "value", "name", "condition" };
     private static readonly string[] ActionProperties = { "type", "target", "value" };
     private static readonly string[] DecisionTableProperties = { "id", "name", "description", "hitPolicy", "inputs", "outputs", "rows" };
     private static readonly string[] DecisionInputProperties = { "field", "operator" };
@@ -200,7 +200,8 @@ public static class RuleSetValidator
         }
     }
 
-    private static void ValidateCondition(RuleJsonValue condition, string path, List<RuleValidationError> errors)
+    private static void ValidateCondition(
+        RuleJsonValue condition, string path, List<RuleValidationError> errors, bool insideQuantifier = false)
     {
         if (condition.Kind != RuleJsonValueKind.Object)
         {
@@ -217,15 +218,45 @@ public static class RuleSetValidator
                 return;
             }
 
-            ValidateGroup(condition, path, errors);
+            ValidateGroup(condition, path, errors, insideQuantifier);
         }
         else
         {
-            ValidateLeaf(condition, path, errors);
+            ValidateLeaf(condition, path, errors, insideQuantifier);
         }
     }
 
-    private static void ValidateGroup(RuleJsonValue group, string path, List<RuleValidationError> errors)
+    /// <summary>
+    /// Checks a field path. The <c>$</c> prefix is reserved for scope references; today the only
+    /// one is <c>"$"</c> itself, meaning the element a quantifier is currently testing, which is
+    /// how a collection of scalars is compared. Reserving the whole prefix leaves room for
+    /// correlated scopes later without a breaking change.
+    /// </summary>
+    private static void ValidateFieldPath(string fieldPath, string path, bool insideQuantifier, List<RuleValidationError> errors)
+    {
+        if (fieldPath.Length == 0 || fieldPath[0] != '$')
+        {
+            return;
+        }
+
+        if (fieldPath != Core.ConditionLeaf.ElementSelfPath)
+        {
+            errors.Add(new RuleValidationError(
+                path,
+                $"'{fieldPath}' is not a valid field path: the '$' prefix is reserved, and \"$\" (the element "
+                + "a quantifier is testing) is the only form currently defined."));
+        }
+        else if (!insideQuantifier)
+        {
+            errors.Add(new RuleValidationError(
+                path,
+                "\"$\" means the element a quantifier is currently testing, so it is only valid inside "
+                + "the 'condition' of an Any/All/None leaf."));
+        }
+    }
+
+    private static void ValidateGroup(
+        RuleJsonValue group, string path, List<RuleValidationError> errors, bool insideQuantifier = false)
     {
         ValidateUnknownProperties(group, path, GroupProperties, errors);
 
@@ -260,11 +291,12 @@ public static class RuleSetValidator
 
         for (int i = 0; i < rules.Items.Count; i++)
         {
-            ValidateCondition(rules.Items[i], path + "/rules/" + i.ToString(CultureInfo.InvariantCulture), errors);
+            ValidateCondition(rules.Items[i], path + "/rules/" + i.ToString(CultureInfo.InvariantCulture), errors, insideQuantifier);
         }
     }
 
-    private static void ValidateLeaf(RuleJsonValue leaf, string path, List<RuleValidationError> errors)
+    private static void ValidateLeaf(
+        RuleJsonValue leaf, string path, List<RuleValidationError> errors, bool insideQuantifier = false)
     {
         ValidateUnknownProperties(leaf, path, LeafProperties, errors);
 
@@ -287,6 +319,16 @@ public static class RuleSetValidator
         {
             errors.Add(new RuleValidationError(path + "/field", "'field' must be a non-empty string."));
             hasField = false;
+        }
+        else if (hasField)
+        {
+            ValidateFieldPath(field.GetString(), path + "/field", insideQuantifier, errors);
+        }
+
+        if (Core.ConditionLeaf.IsQuantifier(parsedOperator))
+        {
+            ValidateQuantifier(leaf, path, hasField, op.GetString(), errors);
+            return;
         }
 
         bool hasExpression = leaf.TryGetProperty("expression", out RuleJsonValue leftExpression);
@@ -413,6 +455,44 @@ public static class RuleSetValidator
 
                 break;
         }
+    }
+
+    /// <summary>
+    /// Checks an Any/All/None leaf: it reads a collection from 'field' and applies a nested
+    /// 'condition' to each element, so it takes neither a 'value' nor an 'expression'.
+    /// </summary>
+    private static void ValidateQuantifier(
+        RuleJsonValue leaf, string path, bool hasField, string operatorName, List<RuleValidationError> errors)
+    {
+        if (!hasField)
+        {
+            errors.Add(new RuleValidationError(
+                path, $"'field' (the collection to quantify over) is required for operator '{operatorName}'."));
+        }
+
+        if (leaf.TryGetProperty("expression", out _))
+        {
+            errors.Add(new RuleValidationError(
+                path + "/expression",
+                $"'expression' is not allowed with operator '{operatorName}'; a quantifier reads its collection from 'field'."));
+        }
+
+        if (leaf.TryGetProperty("value", out _))
+        {
+            errors.Add(new RuleValidationError(
+                path + "/value",
+                $"'value' is not allowed for operator '{operatorName}'; use 'condition' to test each element."));
+        }
+
+        if (!leaf.TryGetProperty("condition", out RuleJsonValue elementCondition))
+        {
+            errors.Add(new RuleValidationError(
+                path,
+                $"'condition' (applied to each element) is required for operator '{operatorName}'."));
+            return;
+        }
+
+        ValidateCondition(elementCondition, path + "/condition", errors, insideQuantifier: true);
     }
 
     /// <summary>

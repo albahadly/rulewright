@@ -22,6 +22,7 @@ internal static class ExpressionOperatorMap
             ["negate"] = ExpressionOperator.Negate,
             ["concat"] = ExpressionOperator.Concat,
             ["coalesce"] = ExpressionOperator.Coalesce,
+            ["count"] = ExpressionOperator.Count,
         };
 
     private static readonly Dictionary<ExpressionOperator, string> ToJson = BuildReverse();
@@ -41,6 +42,7 @@ internal static class ExpressionOperatorMap
     internal static int? RequiredArity(ExpressionOperator @operator) => @operator switch
     {
         ExpressionOperator.Negate => 1,
+        ExpressionOperator.Count => 1,
         ExpressionOperator.Subtract => 2,
         ExpressionOperator.Divide => 2,
         ExpressionOperator.Modulo => 2,

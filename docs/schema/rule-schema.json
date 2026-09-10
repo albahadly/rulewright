@@ -320,7 +320,10 @@
             "NotIn",
             "IsNull",
             "IsNotNull",
-            "custom"
+            "custom",
+            "Any",
+            "All",
+            "None"
           ]
         },
         "value": {
@@ -330,6 +333,10 @@
           "type": "string",
           "minLength": 1,
           "description": "Registered custom function name; required when operator is 'custom'."
+        },
+        "condition": {
+          "$ref": "#/$defs/condition",
+          "description": "The per-element condition for a collection quantifier (Any/All/None). Field paths inside it resolve against the element, and the path \"$\" means the element itself, which is how a collection of scalars is tested."
         }
       },
       "required": [
@@ -483,6 +490,42 @@
               "value"
             ]
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "operator": {
+                "enum": [
+                  "Any",
+                  "All",
+                  "None"
+                ]
+              }
+            },
+            "required": [
+              "operator"
+            ]
+          },
+          "then": {
+            "required": [
+              "field",
+              "condition"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "value"
+                  ]
+                },
+                {
+                  "required": [
+                    "expression"
+                  ]
+                }
+              ]
+            }
+          }
         }
       ],
       "additionalProperties": false
@@ -607,7 +650,8 @@
             "modulo",
             "negate",
             "concat",
-            "coalesce"
+            "coalesce",
+            "count"
           ],
           "description": "Arithmetic (add/subtract/multiply/divide/modulo/negate), string concatenation (concat), or first-non-null selection (coalesce). Any null operand propagates to null (except coalesce); division or modulo by zero yields null."
         },
@@ -690,6 +734,28 @@
             "properties": {
               "operands": {
                 "minItems": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "enum": [
+                  "count"
+                ]
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "properties": {
+              "operands": {
+                "minItems": 1,
+                "maxItems": 1
               }
             }
           }

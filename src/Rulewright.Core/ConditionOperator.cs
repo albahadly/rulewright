@@ -52,4 +52,22 @@ public enum ConditionOperator
 
     /// <summary>A registered <see cref="IRuleFunction"/> decides (JSON: <c>custom</c> with <c>name</c>).</summary>
     Custom,
+
+    /// <summary>
+    /// At least one element of the collection field satisfies <see cref="ConditionLeaf.ElementCondition"/>
+    /// (JSON: <c>Any</c> with <c>condition</c>). False for an empty collection.
+    /// </summary>
+    Any,
+
+    /// <summary>
+    /// Every element of the collection field satisfies <see cref="ConditionLeaf.ElementCondition"/>
+    /// (JSON: <c>All</c> with <c>condition</c>). Vacuously true for an empty collection.
+    /// </summary>
+    All,
+
+    /// <summary>
+    /// No element of the collection field satisfies <see cref="ConditionLeaf.ElementCondition"/>
+    /// (JSON: <c>None</c> with <c>condition</c>). Vacuously true for an empty collection.
+    /// </summary>
+    None,
 }
