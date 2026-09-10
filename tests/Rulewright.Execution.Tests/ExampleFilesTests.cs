@@ -41,10 +41,25 @@ public class ExampleFilesTests
         Assert.NotEmpty(loaded.RuleSet.Rules);
 
         // Evaluation is total — it never throws on data — so every example must run cleanly
-        // against a representative fact (with tracing on, exercising both compiled delegates).
-        var result = Engine.Evaluate(loaded, RepresentativeFact(), new EvaluationOptions { EnableTrace = true });
-        Assert.NotNull(result.Outputs);
-        Assert.NotNull(result.Trace);
+        // against a representative fact. Both execution paths are exercised: the dictionary fact
+        // runs the interpreter, the typed fact compiles every field path in the document against
+        // a real CLR type (which a dictionary fact can never check), and with tracing on so the
+        // traced delegate is built too.
+        var options = new EvaluationOptions { EnableTrace = true };
+
+        RuleEvaluationResult interpreted = Engine.Evaluate(loaded, RepresentativeFact(), options);
+        Assert.Equal(CompilationMode.Interpreted, interpreted.CompilationMode);
+        Assert.NotNull(interpreted.Outputs);
+        Assert.NotNull(interpreted.Trace);
+
+        RuleEvaluationResult compiled = Engine.Evaluate(loaded, TypedFact(), options);
+        Assert.Equal(CompilationMode.Compiled, compiled.CompilationMode);
+        Assert.NotNull(compiled.Trace);
+
+        // The two facts carry the same values, so the same rules must fire on both paths.
+        Assert.Equal(
+            interpreted.FiredRules.Select(r => r.RuleId).ToArray(),
+            compiled.FiredRules.Select(r => r.RuleId).ToArray());
     }
 
     private static Dictionary<string, object?> RepresentativeFact() => new()
@@ -72,6 +87,85 @@ public class ExampleFilesTests
             ["PlacedOn"] = new DateTime(2026, 7, 18),
         },
     };
+
+    /// <summary>
+    /// The same values as <see cref="RepresentativeFact"/>, as a CLR type. Every field path used
+    /// anywhere in <c>examples/</c> must exist here or compilation fails — which is the point:
+    /// it proves the examples bind against a real type, not just against a forgiving dictionary.
+    /// </summary>
+    private static ExampleFact TypedFact() => new ExampleFact
+    {
+        Customer = new ExampleCustomer
+        {
+            Name = "Alice",
+            Age = 30,
+            Tier = "vip",
+            IsVip = true,
+            LoyaltyYears = 5,
+            Country = "US",
+            Email = "alice@acme.com",
+            PostCode = "12345",
+        },
+        Order = new ExampleOrder
+        {
+            Total = 150m,
+            ItemCount = 3,
+            Weight = 2.5,
+            Coupon = "SAVE10",
+            Category = "books",
+            ShippingCost = 5m,
+            DiscountApplied = 10m,
+            PlacedOn = new DateTime(2026, 7, 18),
+        },
+    };
+
+    private sealed class ExampleFact
+    {
+        public ExampleCustomer Customer { get; set; } = new ExampleCustomer();
+
+        public ExampleOrder Order { get; set; } = new ExampleOrder();
+    }
+
+    private sealed class ExampleCustomer
+    {
+        public string? Name { get; set; }
+
+        public long Age { get; set; }
+
+        public string? Tier { get; set; }
+
+        public bool IsVip { get; set; }
+
+        public long LoyaltyYears { get; set; }
+
+        public string? Country { get; set; }
+
+        public string? Email { get; set; }
+
+        public string? PostCode { get; set; }
+    }
+
+    private sealed class ExampleOrder
+    {
+        public decimal Total { get; set; }
+
+        public long ItemCount { get; set; }
+
+        public double Weight { get; set; }
+
+        public string? Coupon { get; set; }
+
+        public string? Category { get; set; }
+
+        public decimal ShippingCost { get; set; }
+
+        public decimal DiscountApplied { get; set; }
+
+        public DateTime PlacedOn { get; set; }
+
+        /// <summary>Absent from the dictionary fact too — exercises the null-path semantics.</summary>
+        public decimal? InternationalPenalty { get; set; }
+    }
 
     private static string FindExamplesDirectory()
     {

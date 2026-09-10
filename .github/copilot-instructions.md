@@ -142,7 +142,7 @@ non-numeric to an arithmetic op → null; divide/modulo by zero → null. Arithm
 unless a float operand forces `double`.
 
 **Decision table** (`hitPolicy`: `"collect"` default = every matching row applies; `"first"` = only
-the first). `inputs` default to `Equals`, `outputs` default to `setOutput`; a `null` cell is a
+the first, via `RuleSet.StopAfterFirstMatch` on the expanded set — not baked into row conditions). `inputs` default to `Equals`, `outputs` default to `setOutput`; a `null` cell is a
 wildcard (input) or skip (output). It **expands to ordinary rules at parse time** — no engine
 special-casing.
 

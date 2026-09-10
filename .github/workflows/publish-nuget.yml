@@ -62,6 +62,9 @@ jobs:
       - name: Test (net8.0)
         run: dotnet test Rulewright.slnx -c Release --no-build -f net8.0
 
+      - name: Test (net10.0)
+        run: dotnet test Rulewright.slnx -c Release --no-build -f net10.0
+
       - name: Compute version (auto-increment, or honor a manual VersionPrefix bump)
         id: ver
         shell: bash

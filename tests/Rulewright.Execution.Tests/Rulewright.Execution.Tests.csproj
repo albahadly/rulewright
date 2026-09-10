@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net48</TargetFrameworks>
+    <!-- Every shipped leg that can host a test run. netstandard2.0 has no runtime of
+         its own; net8.0 covers it, since that is the leg a netstandard2.0 consumer resolves. -->
+    <TargetFrameworks>net8.0;net10.0;net48</TargetFrameworks>
     <!-- xUnit v3 test projects are self-contained executables. -->
     <OutputType>Exe</OutputType>
   </PropertyGroup>

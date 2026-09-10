@@ -12,6 +12,19 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" PrivateAssets="all" />
   </ItemGroup>
 
+  <!--
+    The example documents are served from the repository's own examples/ folder rather than
+    copied here. They were byte-identical duplicates with nothing keeping them in sync, so the
+    editor could quietly drift from the examples the test suite validates. manifest.json (the
+    picker's index) stays local: it is the editor's own metadata, not a rule document.
+  -->
+  <ItemGroup>
+    <Content Include="..\..\examples\*.json"
+             Link="wwwroot\examples\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Rulewright.Core\Rulewright.Core.csproj" />
     <ProjectReference Include="..\..\src\Rulewright.Serialization\Rulewright.Serialization.csproj" />
