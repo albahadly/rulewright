@@ -14,8 +14,7 @@
       net10.0 have System.Text.Json in-box and must not take a package reference for it.
     -->
     <PackageVersion Include="System.Text.Json" Version="10.0.10" />
-    <!-- Build infrastructure. -->
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
+    <!-- Build infrastructure. Source Link is in the SDK, not a package, from .NET 8 on. -->
     <PackageVersion Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" />
     <!-- Tests. -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />

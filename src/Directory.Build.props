@@ -43,9 +43,13 @@
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" PrivateAssets="all" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
-    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="all" />
-  </ItemGroup>
+  <!--
+    No Microsoft.SourceLink.GitHub package reference: Source Link ships inside the .NET SDK from
+    .NET 8 on, driven by the PublishRepositoryUrl / EmbedUntrackedSources / ContinuousIntegrationBuild
+    properties above. The standalone 8.0.0 package was its last release and it dragged in
+    Microsoft.Build.Tasks.Git 8.0.0, which now carries advisory GHSA-23fw-v26w-5fgq and failed
+    restore under TreatWarningsAsErrors. Nothing replaced it because nothing needed to.
+  -->
 
   <ItemGroup>
     <!--

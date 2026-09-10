@@ -30,6 +30,15 @@ fields, which `In`/`NotIn` never could.
   authoring UI knows to offer a condition editor; `ExpressionOperatorCategory.Collection`.
 - [examples/20-collection-operators.json](examples/20-collection-operators.json).
 
+### Build
+
+- Dropped the `Microsoft.SourceLink.GitHub` package reference. Source Link ships inside the .NET
+  SDK from .NET 8 on, so the reference was redundant — and its transitive
+  `Microsoft.Build.Tasks.Git` 8.0.0 picked up advisory GHSA-23fw-v26w-5fgq, which failed CI
+  restore under `TreatWarningsAsErrors`. The vulnerable dependency is gone rather than suppressed,
+  and the shipped symbols are unchanged: the packaged PDBs still carry a Source Link blob pointing
+  at the repository and commit, with every document path deterministically mapped.
+
 ### Known limits
 
 - A quantifier's element condition sees the element, not the root fact, so correlated conditions
