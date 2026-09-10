@@ -183,4 +183,38 @@ public class InterpreterParityTests
         var ruleSet = new RuleSet(new[] { new Rule("parity", condition) });
         return Engine.Evaluate(Engine.LoadRuleSet(ruleSet), fact).FiredRules.Count == 1;
     }
+
+    /// <summary>
+    /// An object-typed property has no CLR type to convert the constant to at compile time, so the
+    /// compiled path must defer to the same runtime comparison the interpreter uses - otherwise an
+    /// int 5 and a long 5 are equal on one path and not the other.
+    /// </summary>
+    [Theory]
+    [InlineData(5, "Equals", 5L, true)]
+    [InlineData(5L, "Equals", 5L, true)]
+    [InlineData(5.0, "Equals", 5L, true)]
+    [InlineData(6, "Equals", 5L, false)]
+    [InlineData("gold", "Equals", "gold", true)]
+    [InlineData(7, "GreaterThan", 5L, true)]
+    [InlineData(3, "GreaterThan", 5L, false)]
+    public void ObjectTypedProperty_ComparesTheSameOnBothPaths(object payload, string op, object comparand, bool expected)
+    {
+        string json = "{\"id\":\"r\",\"condition\":{\"field\":\"Payload\",\"operator\":\"" + op + "\",\"value\":"
+            + (comparand is string text ? "\"" + text + "\"" : comparand.ToString())
+            + "},\"actions\":[]}";
+
+        LoadedRuleSet loaded = Engine.LoadRuleSet(json);
+
+        bool compiled = Engine.Evaluate(loaded, new PayloadFact { Payload = payload }).FiredRules.Count == 1;
+        bool interpreted = Engine.Evaluate(
+            loaded, new Dictionary<string, object?> { ["Payload"] = payload }).FiredRules.Count == 1;
+
+        Assert.Equal(expected, compiled);
+        Assert.Equal(expected, interpreted);
+    }
+
+    private sealed class PayloadFact
+    {
+        public object? Payload { get; set; }
+    }
 }

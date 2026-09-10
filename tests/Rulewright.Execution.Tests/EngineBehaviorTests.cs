@@ -177,7 +177,7 @@ public class EngineBehaviorTests
         Assert.Equal(true, result.Outputs["Ok"]);
 
         ConditionTraceNode root = result.Trace!.Rules.Single().Condition!;
-        Assert.Equal(2, root.Children!.Count);
+        Assert.Equal(2, root.Children.Count);
         Assert.All(root.Children, child => Assert.True(child.Passed));
     }
 
@@ -195,10 +195,140 @@ public class EngineBehaviorTests
         RuleEvaluationResult result = Engine.Evaluate(loaded, fact, new EvaluationOptions { EnableTrace = true });
 
         ConditionTraceNode root = result.Trace!.Rules.Single().Condition!;
-        Assert.Equal(3, root.Children!.Count);
+        Assert.Equal(3, root.Children.Count);
         Assert.False(root.Children[0].Passed);
         Assert.True(root.Children[1].Passed);
         // OR short-circuits after the second child, so the third was never reached.
         Assert.Null(root.Children[2].Passed);
+    }
+
+    // --- Load-time operand guard: both paths fail the same way, at the same moment ---
+
+    /// <summary>
+    /// A hand-built rule reaches the engine without passing through the JSON validator, so the
+    /// engine screens operand shapes itself. Without this the failure was an InvalidCastException
+    /// from inside the compiler, or - for dictionary facts - mid-evaluation.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(MalformedLeaves))]
+    public void MalformedOperand_IsARuleCompilationExceptionAtLoad(ConditionLeaf leaf)
+    {
+        var ruleSet = new RuleSet(new[] { new Rule("bad", leaf) });
+        RuleCompilationException error = Assert.Throws<RuleCompilationException>(() => Engine.LoadRuleSet(ruleSet));
+        Assert.Contains("bad", error.Message, StringComparison.Ordinal);
+    }
+
+    public static TheoryData<ConditionLeaf> MalformedLeaves() => new TheoryData<ConditionLeaf>
+    {
+        new ConditionLeaf("Customer.Name", ConditionOperator.Contains, 42L),        // string op, number operand
+        new ConditionLeaf("Customer.Name", ConditionOperator.StartsWith, null),     // string op, no operand
+        new ConditionLeaf("Customer.Name", ConditionOperator.MatchesRegex, "("),    // unparsable pattern
+        new ConditionLeaf("Customer.Tier", ConditionOperator.In, "gold"),           // set op, scalar operand
+        new ConditionLeaf("Customer.Age", ConditionOperator.GreaterThan, null),     // ordering, null operand
+    };
+
+    // --- Fact shapes that have no compile-time shape fall back to the interpreter ---
+
+    /// <summary>
+    /// A fact whose *static* type is object would compile field paths against System.Object and
+    /// bind to nothing. The interpreter resolves against the runtime type instead, and the result
+    /// says so rather than the call simply failing.
+    /// </summary>
+    [Fact]
+    public void ObjectTypedFact_RunsInterpretedInsteadOfFailingToCompile()
+    {
+        LoadedRuleSet loaded = Engine.LoadRuleSet(TwoRuleSet);
+        object fact = DefaultFact();
+
+        RuleEvaluationResult result = Engine.Evaluate(loaded, fact);
+
+        Assert.Equal(CompilationMode.Interpreted, result.CompilationMode);
+        Assert.Equal(2, result.FiredRules.Count);
+        Assert.Equal(new[] { "high", "low" }, result.FiredRules.Select(r => r.RuleId).ToArray());
+        Assert.Equal(5L, result.Outputs["Discount"]);   // "low" has the lower priority, so it writes last
+    }
+
+    /// <summary>A read-only dictionary is a dictionary fact too.</summary>
+    [Fact]
+    public void ReadOnlyDictionaryFact_RunsInterpreted()
+    {
+        LoadedRuleSet loaded = Engine.LoadRuleSet(TwoRuleSet);
+        IReadOnlyDictionary<string, object?> fact = new Dictionary<string, object?>
+        {
+            ["Customer"] = new Dictionary<string, object?> { ["Age"] = 30L, ["IsVip"] = true },
+        };
+
+        RuleEvaluationResult result = Engine.Evaluate(loaded, fact);
+
+        Assert.Equal(CompilationMode.Interpreted, result.CompilationMode);
+        Assert.Equal(2, result.FiredRules.Count);
+        Assert.Equal(5L, result.Outputs["Discount"]);
+    }
+
+    // --- Outputs ---
+
+    /// <summary>
+    /// addToOutput accumulates numbers. A target already holding something non-numeric is left
+    /// alone rather than being replaced with null - one rule must not wipe what another wrote.
+    /// </summary>
+    [Fact]
+    public void AddToOutput_LeavesANonNumericTargetUntouched()
+    {
+        const string json = @"{ ""rules"": [
+            { ""id"": ""label"", ""priority"": 2,
+              ""condition"": { ""field"": ""Customer.Age"", ""operator"": ""GreaterThan"", ""value"": 1 },
+              ""actions"": [ { ""type"": ""setOutput"", ""target"": ""Score"", ""value"": ""N/A"" } ] },
+            { ""id"": ""bump"", ""priority"": 1,
+              ""condition"": { ""field"": ""Customer.Age"", ""operator"": ""GreaterThan"", ""value"": 1 },
+              ""actions"": [ { ""type"": ""addToOutput"", ""target"": ""Score"", ""value"": 5 } ] } ] }";
+
+        RuleEvaluationResult result = Engine.Evaluate(Engine.LoadRuleSet(json), DefaultFact());
+
+        Assert.Equal("N/A", result.Outputs["Score"]);
+    }
+
+    // --- Trace ---
+
+    /// <summary>
+    /// "The author turned this off" and "evaluation had already finished" are very different
+    /// facts about a rule, and a trace that renders both as Skipped=true cannot tell them apart.
+    /// </summary>
+    [Fact]
+    public void Trace_DistinguishesDisabledFromStoppedAfterMatch()
+    {
+        const string json = @"{ ""rules"": [
+            { ""id"": ""off"", ""priority"": 4, ""enabled"": false, ""condition"": { ""field"": ""Customer.Age"", ""operator"": ""GreaterThan"", ""value"": 1 }, ""actions"": [] },
+            { ""id"": ""hit"", ""priority"": 3, ""condition"": { ""field"": ""Customer.Age"", ""operator"": ""GreaterThan"", ""value"": 1 }, ""actions"": [] },
+            { ""id"": ""later"", ""priority"": 1, ""condition"": { ""field"": ""Customer.Age"", ""operator"": ""GreaterThan"", ""value"": 1 }, ""actions"": [] } ] }";
+
+        RuleEvaluationResult result = Engine.Evaluate(
+            Engine.LoadRuleSet(json),
+            DefaultFact(),
+            new EvaluationOptions { EnableTrace = true, StopOnFirstMatch = true });
+
+        RuleTrace hit = result.Trace!.Rules.Single(r => r.RuleId == "hit");
+        RuleTrace off = result.Trace.Rules.Single(r => r.RuleId == "off");
+        RuleTrace later = result.Trace.Rules.Single(r => r.RuleId == "later");
+
+        Assert.Equal(RuleSkipReason.None, hit.SkipReason);
+        Assert.True(hit.Fired);
+        Assert.Equal(RuleSkipReason.Disabled, off.SkipReason);
+        Assert.Equal(RuleSkipReason.StoppedAfterMatch, later.SkipReason);
+        Assert.True(off.Skipped && later.Skipped);
+    }
+
+    /// <summary>A computed left-hand side names what was computed, not "(fact)".</summary>
+    [Fact]
+    public void Trace_DescribesAComputedLeftHandSide()
+    {
+        const string json = @"{ ""id"": ""avg"", ""condition"": {
+            ""expression"": { ""op"": ""divide"", ""operands"": [ { ""field"": ""Order.Total"" }, { ""field"": ""Order.ItemCount"" } ] },
+            ""operator"": ""GreaterThan"", ""value"": 25 }, ""actions"": [] }";
+
+        RuleEvaluationResult result = Engine.Evaluate(
+            Engine.LoadRuleSet(json), DefaultFact(), new EvaluationOptions { EnableTrace = true });
+
+        string description = result.Trace!.Rules.Single().Condition!.Description;
+        Assert.Equal("divide(Order.Total, Order.ItemCount) GreaterThan 25", description);
     }
 }

@@ -24,7 +24,10 @@ internal static class ConditionDescriber
         }
 
         var leaf = (ConditionLeaf)node;
-        string field = leaf.Field ?? "(fact)";
+
+        // A computed left-hand side renders as the expression itself: "(fact)" is reserved for a
+        // field-less custom call, where the whole fact really is the operand.
+        string field = leaf.Left is not null ? Describe(leaf.Left) : leaf.Field ?? "(fact)";
         return leaf.Operator switch
         {
             ConditionOperator.Custom => $"{field} custom:{leaf.FunctionName}",
@@ -33,6 +36,31 @@ internal static class ConditionDescriber
             _ => $"{field} {OperatorName(leaf.Operator)} {Literal(leaf.Value)}",
         };
     }
+
+    /// <summary>
+    /// Renders a value expression in the same shape the JSON reads, so a trace of a computed
+    /// left-hand side says what was computed rather than naming the fact.
+    /// </summary>
+    internal static string Describe(ValueExpression expression) => expression switch
+    {
+        LiteralExpression literal => Literal(literal.Value),
+        FieldExpression field => field.Path,
+        OperatorExpression op => ExpressionOperatorName(op.Operator)
+            + "(" + string.Join(", ", op.Operands.Select(Describe)) + ")",
+        _ => "(expression)",
+    };
+
+    private static string ExpressionOperatorName(ExpressionOperator @operator) => @operator switch
+    {
+        ExpressionOperator.Add => "add",
+        ExpressionOperator.Subtract => "subtract",
+        ExpressionOperator.Multiply => "multiply",
+        ExpressionOperator.Divide => "divide",
+        ExpressionOperator.Modulo => "modulo",
+        ExpressionOperator.Negate => "negate",
+        ExpressionOperator.Concat => "concat",
+        _ => "coalesce",
+    };
 
     private static string OperatorName(ConditionOperator @operator) => @operator switch
     {

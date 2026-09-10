@@ -111,7 +111,7 @@ public sealed class RulewrightEngine
         var entries = new List<RuleEntry>(ruleSet.Rules.Count);
         foreach (Rule rule in ordered)
         {
-            ValidateFunctions(rule, rule.Condition);
+            ValidateLeaves(rule, rule.Condition);
 
             (IReadOnlyDictionary<string, object?> Outputs, bool HasComplex) thenPlan = BuildOutputPlan(rule, rule.Actions);
             (IReadOnlyDictionary<string, object?> Outputs, bool HasComplex) elsePlan = BuildOutputPlan(rule, rule.ElseActions);
@@ -222,7 +222,12 @@ public sealed class RulewrightEngine
 
         options ??= EvaluationOptions.Default;
 
-        if (fact is System.Collections.IDictionary or IDictionary<string, object?>)
+        // Dictionary facts have no compile-time shape. Neither does a fact whose *static* type is
+        // object: field paths would be compiled against System.Object and bind to nothing, so the
+        // interpreter (which resolves against the runtime type) is the honest path, and
+        // CompilationMode.Interpreted reports the degradation rather than hiding it.
+        if (fact is System.Collections.IDictionary or IDictionary<string, object?> or IReadOnlyDictionary<string, object?>
+            || typeof(TFact) == typeof(object))
         {
             object boxedFact = fact;
             return EvaluateCore(
@@ -321,11 +326,21 @@ public sealed class RulewrightEngine
         var outputs = new Dictionary<string, object?>(StringComparer.Ordinal);
         bool stopped = false;
 
+        // The set's own policy (a `first` decision table) and the caller's option combine with OR:
+        // a caller may stop a collecting set early, but cannot turn a `first` table into one.
+        bool stopOnFirstMatch = options.StopOnFirstMatch || loaded.RuleSet.StopAfterFirstMatch;
+
         foreach (RuleEntry entry in loaded.OrderedRules)
         {
             if (stopped || !entry.Rule.Enabled)
             {
-                traceRules?.Add(new RuleTrace(entry.Rule.Id, fired: false, skipped: true, condition: null));
+                // Disabled wins when both apply: it is a property of the rule itself, true wherever
+                // the rule sits, whereas stopping is an accident of where the match landed.
+                traceRules?.Add(new RuleTrace(
+                    entry.Rule.Id,
+                    fired: false,
+                    entry.Rule.Enabled ? RuleSkipReason.StoppedAfterMatch : RuleSkipReason.Disabled,
+                    condition: null));
                 continue;
             }
 
@@ -342,7 +357,7 @@ public sealed class RulewrightEngine
                 matched = evaluateRule(entry, null);
             }
 
-            traceRules?.Add(new RuleTrace(entry.Rule.Id, matched, skipped: false, conditionTrace));
+            traceRules?.Add(new RuleTrace(entry.Rule.Id, matched, RuleSkipReason.None, conditionTrace));
 
             if (matched)
             {
@@ -351,7 +366,7 @@ public sealed class RulewrightEngine
                 IReadOnlyDictionary<string, object?> ruleOutputs = applyOutputs(entry, false, outputs);
                 fired.Add(new FiredRule(entry.Rule.Id, ruleOutputs, RuleBranch.Then));
 
-                if (options.StopOnFirstMatch)
+                if (stopOnFirstMatch)
                 {
                     stopped = true;
                 }
@@ -385,24 +400,95 @@ public sealed class RulewrightEngine
             _ => RuleExpressionCompiler.Compile<TFact>(entry.Rule, _functions, _regexTimeout, entry.NodeLayout));
     }
 
-    private void ValidateFunctions(Rule rule, ConditionNode node)
+    /// <summary>
+    /// Checks every leaf's operand against its operator once, at load time, so a malformed rule
+    /// fails the same way whichever execution path would have run it. JSON documents are already
+    /// screened by <see cref="RuleSetValidator"/>; a hand-built <see cref="RuleSet"/> reaches the
+    /// engine unscreened, and without this it would surface as an <see cref="InvalidCastException"/>
+    /// from deep inside the compiler (typed facts) or mid-evaluation (dictionary facts).
+    /// </summary>
+    private void ValidateLeaves(Rule rule, ConditionNode node)
     {
-        switch (node)
+        if (node is ConditionGroup group)
         {
-            case ConditionGroup group:
-                foreach (ConditionNode child in group.Children)
+            foreach (ConditionNode child in group.Children)
+            {
+                ValidateLeaves(rule, child);
+            }
+
+            return;
+        }
+
+        var leaf = (ConditionLeaf)node;
+        switch (leaf.Operator)
+        {
+            case ConditionOperator.Custom:
+                if (!_functions.ContainsKey(leaf.FunctionName!))
                 {
-                    ValidateFunctions(rule, child);
+                    throw new RuleCompilationException(
+                        rule.Id,
+                        $"custom function '{leaf.FunctionName}' is not registered. "
+                        + "Register it with RulewrightBuilder.RegisterFunction before loading the rule set.");
                 }
 
                 break;
 
-            case ConditionLeaf { Operator: ConditionOperator.Custom } leaf
-                when !_functions.ContainsKey(leaf.FunctionName!):
-                throw new RuleCompilationException(
-                    rule.Id,
-                    $"custom function '{leaf.FunctionName}' is not registered. "
-                    + "Register it with RulewrightBuilder.RegisterFunction before loading the rule set.");
+            case ConditionOperator.Contains:
+            case ConditionOperator.StartsWith:
+            case ConditionOperator.EndsWith:
+                RequireOperand<string>(rule, leaf, "a string");
+                break;
+
+            case ConditionOperator.MatchesRegex:
+                RequireOperand<string>(rule, leaf, "a string");
+                RequireValidRegex(rule, leaf);
+                break;
+
+            case ConditionOperator.In:
+            case ConditionOperator.NotIn:
+                RequireOperand<object?[]>(rule, leaf, "an array");
+                break;
+
+            case ConditionOperator.GreaterThan:
+            case ConditionOperator.GreaterThanOrEqual:
+            case ConditionOperator.LessThan:
+            case ConditionOperator.LessThanOrEqual:
+                if (leaf.Value is null)
+                {
+                    throw new RuleCompilationException(
+                        rule.Id,
+                        $"operator '{ConditionDescriber.Describe(leaf)}' requires a non-null comparison value.");
+                }
+
+                break;
+        }
+    }
+
+    private static void RequireOperand<TOperand>(Rule rule, ConditionLeaf leaf, string expected)
+    {
+        if (leaf.Value is TOperand)
+        {
+            return;
+        }
+
+        string actual = leaf.Value is null ? "null" : leaf.Value.GetType().Name;
+        throw new RuleCompilationException(
+            rule.Id,
+            $"operator '{ConditionDescriber.Describe(leaf)}' requires {expected} comparison value, but got {actual}.");
+    }
+
+    private void RequireValidRegex(Rule rule, ConditionLeaf leaf)
+    {
+        try
+        {
+            _ = new System.Text.RegularExpressions.Regex((string)leaf.Value!, System.Text.RegularExpressions.RegexOptions.None, _regexTimeout);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new RuleCompilationException(
+                rule.Id,
+                $"invalid regular expression \"{leaf.Value}\": {ex.Message}",
+                ex);
         }
     }
 

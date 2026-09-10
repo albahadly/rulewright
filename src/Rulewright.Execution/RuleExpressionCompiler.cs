@@ -340,13 +340,7 @@ internal static class RuleExpressionCompiler
             // Computed left-hand side: compile it (field access stays reflection-free), then
             // apply the operator through the shared boxed evaluator so the result matches the
             // interpreter exactly.
-            Expression left = BuildValueExpression(leaf.Left, fact, context.Rule);
-            return Expression.Call(
-                ApplyOperatorMethod,
-                Expression.Constant(leaf, typeof(ConditionLeaf)),
-                left,
-                Expression.Constant(context.Functions, typeof(IReadOnlyDictionary<string, IRuleFunction>)),
-                Expression.Constant(context.RegexTimeout, typeof(TimeSpan)));
+            return ApplySharedOperator(leaf, BuildValueExpression(leaf.Left, fact, context.Rule), context);
         }
 
         if (leaf.Field is null)
@@ -425,9 +419,32 @@ internal static class RuleExpressionCompiler
         _ => Expression.Constant(false),
     };
 
+    /// <summary>
+    /// Routes a comparison through the same boxed evaluator the interpreter uses, so both paths
+    /// answer identically for operands that only have a runtime type.
+    /// </summary>
+    private static Expression ApplySharedOperator(ConditionLeaf leaf, Expression boxedValue, Context context)
+        => Expression.Call(
+            ApplyOperatorMethod,
+            Expression.Constant(leaf, typeof(ConditionLeaf)),
+            boxedValue,
+            Expression.Constant(context.Functions, typeof(IReadOnlyDictionary<string, IRuleFunction>)),
+            Expression.Constant(context.RegexTimeout, typeof(TimeSpan)));
+
     private static Expression BuildComparison(Expression value, ConditionLeaf leaf, Context context)
     {
         Type type = value.Type;
+
+        // An object-typed field carries whatever the fact put in it, so there is no CLR type to
+        // convert the constant to at compile time. EqualityComparer<object> would then make an
+        // int 5 and a long 5 unequal where the interpreter compares them numerically, so this
+        // defers to the shared runtime evaluator instead - the same treatment a computed
+        // left-hand side gets. Custom keeps its compile-time function binding.
+        if (type == typeof(object) && leaf.Operator != ConditionOperator.Custom)
+        {
+            return ApplySharedOperator(leaf, value, context);
+        }
+
         switch (leaf.Operator)
         {
             case ConditionOperator.IsNull:

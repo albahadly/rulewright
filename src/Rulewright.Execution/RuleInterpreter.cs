@@ -217,6 +217,11 @@ internal static class RuleInterpreter
             return generic.TryGetValue(name, out object? value) ? value : null;
         }
 
+        if (current is IReadOnlyDictionary<string, object?> readOnly)
+        {
+            return readOnly.TryGetValue(name, out object? readOnlyValue) ? readOnlyValue : null;
+        }
+
         if (current is System.Collections.IDictionary nonGeneric)
         {
             return nonGeneric.Contains(name) ? nonGeneric[name] : null;

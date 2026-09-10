@@ -37,12 +37,17 @@ internal static class OutputApplier
         switch (type)
         {
             case RuleAction.AddToOutputType:
-                // Only numeric contributions accumulate; a null or non-numeric value is
-                // ignored so one stray rule cannot wipe a running total.
+                // Only numeric contributions accumulate, and only onto a numeric (or absent)
+                // running total. A null or non-numeric value contributes nothing, and a target
+                // already holding a non-numeric value is left exactly as it is — either way one
+                // stray rule cannot wipe what another wrote.
                 if (value is not null && ValueConverter.IsNumericValue(value))
                 {
                     running.TryGetValue(target, out object? existing);
-                    running[target] = ValueExpressionOps.Add(existing ?? DecimalZero, value);
+                    if (existing is null || ValueConverter.IsNumericValue(existing))
+                    {
+                        running[target] = ValueExpressionOps.Add(existing ?? DecimalZero, value);
+                    }
                 }
 
                 break;
