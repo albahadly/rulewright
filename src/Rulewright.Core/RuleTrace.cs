@@ -14,12 +14,26 @@ public sealed class RuleTrace
     /// <param name="ruleId">The rule's id.</param>
     /// <param name="fired">Whether the rule's condition passed.</param>
     /// <param name="skipped">
-    /// Whether the rule was never evaluated (disabled, or short-circuited by
-    /// <see cref="EvaluationOptions.StopOnFirstMatch"/>).
+    /// Whether the rule was never evaluated. Prefer the <see cref="RuleSkipReason"/> overload,
+    /// which also records <em>why</em>; this one reports a skip as
+    /// <see cref="RuleSkipReason.Disabled"/>.
     /// </param>
     /// <param name="condition">The condition trace tree, or null when the rule was skipped.</param>
     /// <exception cref="ArgumentException"><paramref name="ruleId"/> is null or empty.</exception>
     public RuleTrace(string ruleId, bool fired, bool skipped, ConditionTraceNode? condition)
+        : this(ruleId, fired, skipped ? RuleSkipReason.Disabled : RuleSkipReason.None, condition)
+    {
+    }
+
+    /// <summary>
+    /// Creates a rule trace entry, recording why the rule was skipped when it was.
+    /// </summary>
+    /// <param name="ruleId">The rule's id.</param>
+    /// <param name="fired">Whether the rule's condition passed.</param>
+    /// <param name="skipReason">Why the rule was never evaluated, or <see cref="RuleSkipReason.None"/>.</param>
+    /// <param name="condition">The condition trace tree, or null when the rule was skipped.</param>
+    /// <exception cref="ArgumentException"><paramref name="ruleId"/> is null or empty.</exception>
+    public RuleTrace(string ruleId, bool fired, RuleSkipReason skipReason, ConditionTraceNode? condition)
     {
         if (string.IsNullOrEmpty(ruleId))
         {
@@ -28,7 +42,7 @@ public sealed class RuleTrace
 
         RuleId = ruleId;
         Fired = fired;
-        Skipped = skipped;
+        SkipReason = skipReason;
         Condition = condition;
     }
 
@@ -38,8 +52,15 @@ public sealed class RuleTrace
     /// <summary>Whether the rule's condition passed.</summary>
     public bool Fired { get; }
 
-    /// <summary>Whether the rule was never evaluated (disabled, or short-circuited by stop-on-first-match).</summary>
-    public bool Skipped { get; }
+    /// <summary>Whether the rule was never evaluated; see <see cref="SkipReason"/> for why.</summary>
+    public bool Skipped => SkipReason != RuleSkipReason.None;
+
+    /// <summary>
+    /// Why the rule was never evaluated — <see cref="RuleSkipReason.Disabled"/> (the author turned
+    /// it off) or <see cref="RuleSkipReason.StoppedAfterMatch"/> (evaluation had already
+    /// finished) — or <see cref="RuleSkipReason.None"/> when it was evaluated.
+    /// </summary>
+    public RuleSkipReason SkipReason { get; }
 
     /// <summary>The condition trace tree, or null when the rule was skipped.</summary>
     public ConditionTraceNode? Condition { get; }

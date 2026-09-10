@@ -29,19 +29,22 @@ public class GoldenFileTests
         string ruleSetJson = root.GetProperty("ruleSet").GetRawText();
         Dictionary<string, object?> fact = SystemTextJsonFacts.ToDictionary(root.GetProperty("fact"));
 
-        var options = new EvaluationOptions();
+        bool stopOnFirstMatch = false;
+        bool enableTrace = false;
         if (root.TryGetProperty("options", out JsonElement optionsElement))
         {
             if (optionsElement.TryGetProperty("stopOnFirstMatch", out JsonElement stop))
             {
-                options.StopOnFirstMatch = stop.GetBoolean();
+                stopOnFirstMatch = stop.GetBoolean();
             }
 
             if (optionsElement.TryGetProperty("enableTrace", out JsonElement trace))
             {
-                options.EnableTrace = trace.GetBoolean();
+                enableTrace = trace.GetBoolean();
             }
         }
+
+        var options = new EvaluationOptions { StopOnFirstMatch = stopOnFirstMatch, EnableTrace = enableTrace };
 
         LoadedRuleSet loaded = TestEngine.Engine.LoadRuleSet(ruleSetJson);
         RuleEvaluationResult result = TestEngine.Engine.Evaluate(loaded, fact, options);
