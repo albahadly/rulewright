@@ -20,6 +20,7 @@
     <File Path="examples/17-disabled-rule.json" />
     <File Path="examples/18-builtin-functions.json" />
     <File Path="examples/19-decision-table-computed-cell.json" />
+    <File Path="examples/20-collection-operators.json.json" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/Rulewright.Sample.AspNetCore/Rulewright.Sample.AspNetCore.csproj" />
