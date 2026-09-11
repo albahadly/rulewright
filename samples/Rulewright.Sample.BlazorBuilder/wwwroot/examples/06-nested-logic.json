@@ -1,0 +1,29 @@
+{
+  "id": "free-shipping",
+  "description": "Free shipping for gold/vip members, OR for orders of at least $75 that are not oversized. Shows AND / OR / NOT nesting to any depth.",
+  "condition": {
+    "type": "group",
+    "operator": "OR",
+    "rules": [
+      { "field": "Customer.Tier", "operator": "In", "value": ["gold", "vip"] },
+      {
+        "type": "group",
+        "operator": "AND",
+        "rules": [
+          { "field": "Order.Total", "operator": "GreaterThanOrEqual", "value": 75 },
+          {
+            "type": "group",
+            "operator": "NOT",
+            "rules": [
+              { "field": "Order.Weight", "operator": "GreaterThan", "value": 20 }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "actions": [
+    { "type": "setOutput", "target": "Shipping", "value": 0 },
+    { "type": "setOutput", "target": "ShippingReason", "value": "free-shipping-qualified" }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "decisionTable": {
+    "name": "Shipping cost",
+    "id": "shipping",
+    "hitPolicy": "first",
+    "inputs": [
+      { "field": "Customer.Tier", "operator": "Equals" },
+      { "field": "Order.Total", "operator": "GreaterThanOrEqual" }
+    ],
+    "outputs": [
+      { "target": "ShippingCost" },
+      { "target": "ShippingTier" }
+    ],
+    "rows": [
+      { "when": ["vip", null], "then": [0, "free-vip"] },
+      { "when": [null, 100], "then": [0, "free-over-100"] },
+      { "when": [null, 50], "then": [4.95, "reduced"] },
+      { "when": [null, null], "then": [9.95, "standard"] }
+    ]
+  }
+}

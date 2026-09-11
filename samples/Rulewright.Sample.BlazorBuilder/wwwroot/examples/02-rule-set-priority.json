@@ -1,0 +1,26 @@
+{
+  "name": "Discount tiers",
+  "rules": [
+    {
+      "id": "base-discount",
+      "description": "Everyone with a real order starts at 0% off.",
+      "priority": 1,
+      "condition": { "field": "Order.Total", "operator": "GreaterThan", "value": 0 },
+      "actions": [ { "type": "setOutput", "target": "Discount", "value": 0 } ]
+    },
+    {
+      "id": "loyalty-discount",
+      "description": "3+ year customers get 5%.",
+      "priority": 5,
+      "condition": { "field": "Customer.LoyaltyYears", "operator": "GreaterThanOrEqual", "value": 3 },
+      "actions": [ { "type": "setOutput", "target": "Discount", "value": 5 } ]
+    },
+    {
+      "id": "vip-discount",
+      "description": "VIPs get 15%. Highest priority, so it is evaluated first. Evaluate this set with EvaluationOptions.StopOnFirstMatch = true so the highest-priority matching rule wins and evaluation stops (this example's golden fixture does exactly that). Without StopOnFirstMatch, every matching rule fires and the lowest-priority one overwrites the shared Discount output last.",
+      "priority": 10,
+      "condition": { "field": "Customer.IsVip", "operator": "Equals", "value": true },
+      "actions": [ { "type": "setOutput", "target": "Discount", "value": 15 } ]
+    }
+  ]
+}

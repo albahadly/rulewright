@@ -1,0 +1,19 @@
+{
+  "id": "arithmetic-showcase",
+  "description": "Every arithmetic operator in one rule. Arithmetic runs in decimal unless a floating-point operand forces double, so divide is never integer-truncated; a null or non-numeric operand yields null, and dividing by zero yields null.",
+  "condition": { "field": "Order.Total", "operator": "GreaterThan", "value": 0 },
+  "actions": [
+    { "type": "setOutput", "target": "Sum",
+      "value": { "op": "add", "operands": [ { "field": "Order.Total" }, { "field": "Order.ShippingCost" }, 2 ] } },
+    { "type": "setOutput", "target": "Difference",
+      "value": { "op": "subtract", "operands": [ { "field": "Order.Total" }, 10 ] } },
+    { "type": "setOutput", "target": "Doubled",
+      "value": { "op": "multiply", "operands": [ { "field": "Order.Total" }, 2 ] } },
+    { "type": "setOutput", "target": "PricePerItem",
+      "value": { "op": "divide", "operands": [ { "field": "Order.Total" }, { "field": "Order.ItemCount" } ] } },
+    { "type": "setOutput", "target": "IsOddItemCount",
+      "value": { "op": "modulo", "operands": [ { "field": "Order.ItemCount" }, 2 ] } },
+    { "type": "setOutput", "target": "Refund",
+      "value": { "op": "negate", "operands": [ { "field": "Order.Total" } ] } }
+  ]
+}

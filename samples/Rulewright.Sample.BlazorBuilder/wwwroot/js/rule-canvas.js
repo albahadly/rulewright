@@ -11,7 +11,7 @@ window.rulewrightFlowBuilder = (function(){
 
   // Auto-layout geometry (used by layoutAll / importDocument / Tidy).
   const COL_W = 280;      // horizontal gap between tree columns
-  const ROW_H = 140;      // vertical slot per leaf / action
+  const ROW_GAP = 34;     // vertical gap between two stacked siblings
   const BAND_GAP = 90;    // vertical gap between two rules' bands
   const FACT_X = 40;      // the shared Fact Input column
   const GRID = 12;        // snap-to-grid step (world units)
@@ -95,8 +95,8 @@ window.rulewrightFlowBuilder = (function(){
     document.getElementById('zoomLabel').textContent = Math.round(state.scale*100) + "%";
   }
 
-  // Frame every node in the viewport. Essential after import/tidy: condition trees lay out to the
-  // LEFT of their rule (x − COL_W per level), so deep trees run into negative X.
+  // Frame every node in the viewport. Essential after import/tidy: a wide graph does not fit at
+  // 100%, and the band a rule occupies depends on how deep its condition tree is.
   function fitToView(){
     if(state.nodes.size === 0){ state.scale = 1; state.panX = 60; state.panY = 60; applyWorldTransform(); return; }
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -1113,27 +1113,68 @@ window.rulewrightFlowBuilder = (function(){
   /* ============================================================
      Auto-layout (Tidy) — reposition the live graph into tidy bands
      ============================================================ */
+  // The nodes wired INTO this one, minus rule anchors: a rule feeds its actions, it is not part
+  // of their upstream tree.
+  function upstreamOf(node){
+    return node.inputs
+      .map(id=>id && state.connections.get(id))
+      .filter(c=>c && state.nodes.get(c.from) && state.nodes.get(c.from).type !== 'rule')
+      .map(c=>state.nodes.get(c.from));
+  }
+
+  // How many columns a subtree needs, counting its own root.
+  function upstreamDepth(node){
+    const kids = upstreamOf(node);
+    return kids.length ? 1 + Math.max(...kids.map(upstreamDepth)) : 1;
+  }
+
+  // Place `node` and everything upstream of it: the node in column `x`, its operands one column
+  // to the left, the whole subtree starting at `y`. Siblings stack by their MEASURED heights --
+  // a node with many port rows is taller than any fixed slot, and pretending otherwise is what
+  // used to let wide operand lists sit on top of each other. The parent is centred against the
+  // block its children occupy. Returns the bottom edge of everything placed, so the caller can
+  // put the next sibling directly beneath it.
   function placeUpstream(nodeId, x, y){
     const node = state.nodes.get(nodeId);
-    if(!node) return y + ROW_H;
-    node.x = x; node.y = y;
-    const childConns = node.inputs
-      .map(id=>id && state.connections.get(id))
-      .filter(c=>c && state.nodes.get(c.from) && state.nodes.get(c.from).type !== 'rule');
-    if(childConns.length === 0) return y + ROW_H;
-    let cy = y;
-    childConns.forEach(c=>{ cy = placeUpstream(c.from, x - COL_W, cy); });
-    return cy;
+    if(!node) return y;
+    let childBottom = y;
+    upstreamOf(node).forEach((kid, i)=>{
+      if(i > 0) childBottom += ROW_GAP;
+      childBottom = placeUpstream(kid.id, x - COL_W, childBottom);
+    });
+    const own = nodeHeight(node);
+    const span = Math.max(own, childBottom - y);
+    node.x = x;
+    node.y = y + (span - own)/2;
+    return y + span;
   }
 
   function layoutAll(){
     const facts = [...state.nodes.values()].filter(n=>n.type==='trigger');
-    facts.forEach((f,i)=>{ f.x = FACT_X; f.y = 40 + i*ROW_H; });
+    let factY = 40;
+    facts.forEach(f=>{ f.x = FACT_X; f.y = factY; factY += nodeHeight(f) + ROW_GAP; });
 
     const ruleNodes = [...state.nodes.values()].filter(n=>n.type==='rule')
       .sort((a,b)=> (Number(b.config.priority)||0) - (Number(a.config.priority)||0));
 
-    const RULE_X = FACT_X + COL_W*4;
+    // Columns are sized to the deepest tree on the canvas. With fixed columns a condition tree
+    // deeper than four levels grew back into the Fact Input column, and any chained value
+    // expression (Expression <- Field Ref) landed exactly on the Rule column.
+    let condDepth = 0, valueDepth = 0;
+    ruleNodes.forEach(rn=>{
+      const cond = rn.inputs[0] && state.connections.get(rn.inputs[0]);
+      const condFrom = cond && state.nodes.get(cond.from);
+      if(condFrom) condDepth = Math.max(condDepth, upstreamDepth(condFrom));
+      actionsOf(rn).forEach(a=>{
+        const val = a.inputs[1] && state.connections.get(a.inputs[1]);
+        const valFrom = val && state.nodes.get(val.from);
+        if(valFrom) valueDepth = Math.max(valueDepth, upstreamDepth(valFrom));
+      });
+    });
+
+    const RULE_X   = FACT_X + COL_W * Math.max(4, condDepth + 1);
+    const ACTION_X = RULE_X  + COL_W * Math.max(2, valueDepth + 1);
+
     let bandY = 40;
     ruleNodes.forEach(rn=>{
       let condBottom = bandY;
@@ -1141,17 +1182,25 @@ window.rulewrightFlowBuilder = (function(){
       if(condConn && state.nodes.get(condConn.from)){
         condBottom = placeUpstream(condConn.from, RULE_X - COL_W, bandY);
       }
+
       const acts = actionsOf(rn);
-      let ay = bandY;
-      acts.forEach(a=>{
-        a.x = RULE_X + COL_W*2; a.y = ay;
+      let actionBottom = bandY;
+      acts.forEach((a, i)=>{
+        if(i > 0) actionBottom += ROW_GAP;
         const vconn = a.inputs[1] && state.connections.get(a.inputs[1]);
-        if(vconn && state.nodes.get(vconn.from)) placeUpstream(vconn.from, RULE_X + COL_W, ay);
-        ay += ROW_H;
+        const valueBottom = (vconn && state.nodes.get(vconn.from))
+          ? placeUpstream(vconn.from, ACTION_X - COL_W, actionBottom)
+          : actionBottom;
+        const own = nodeHeight(a);
+        const span = Math.max(own, valueBottom - actionBottom);
+        a.x = ACTION_X;
+        a.y = actionBottom + (span - own)/2;
+        actionBottom += span;
       });
-      const bandHeight = Math.max(condBottom - bandY, (acts.length||1) * ROW_H, nodeHeight(rn));
+
+      const bandHeight = Math.max(condBottom - bandY, actionBottom - bandY, nodeHeight(rn));
       rn.x = RULE_X;
-      rn.y = bandY + Math.max(0, (bandHeight - nodeHeight(rn))/2);
+      rn.y = bandY + (bandHeight - nodeHeight(rn))/2;
       bandY += bandHeight + BAND_GAP;
     });
 

@@ -1,0 +1,20 @@
+{
+  "decisionTable": {
+    "name": "Loyalty points",
+    "id": "points",
+    "hitPolicy": "collect",
+    "inputs": [
+      { "field": "Order.Total", "operator": "GreaterThanOrEqual" },
+      { "field": "Customer.Tier", "operator": "In" }
+    ],
+    "outputs": [
+      { "target": "Points", "type": "addToOutput" },
+      { "target": "PointReasons", "type": "appendToOutput" }
+    ],
+    "rows": [
+      { "when": [50, null], "then": [10, "order-over-50"] },
+      { "when": [100, null], "then": [20, "order-over-100"] },
+      { "when": [null, ["gold", "vip"]], "then": [50, "premium-member"] }
+    ]
+  }
+}

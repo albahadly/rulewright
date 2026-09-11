@@ -1,0 +1,17 @@
+{
+  "decisionTable": {
+    "name": "Free-shipping messaging (if / else, DRY)",
+    "description": "The same behavior as 13-if-else-append.json, expressed as a decision table so the condition is written once. The field and operator live in 'inputs', the threshold appears once in row 0, and the all-wildcard row 1 is the 'else' branch. With hitPolicy 'first' exactly one row applies. Trade-off vs. 13: no duplicated/negated condition to keep in sync, at the cost of being less obvious to a first-time reader.",
+    "hitPolicy": "first",
+    "inputs": [
+      { "field": "Order.Total", "operator": "GreaterThanOrEqual" }
+    ],
+    "outputs": [
+      { "target": "Messages", "type": "appendToOutput" }
+    ],
+    "rows": [
+      { "when": [100], "then": ["You qualify for free shipping!"] },
+      { "when": [null], "then": ["Add more to your cart to unlock free shipping."] }
+    ]
+  }
+}

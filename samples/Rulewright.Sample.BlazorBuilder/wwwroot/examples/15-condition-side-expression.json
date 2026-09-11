@@ -1,0 +1,12 @@
+{
+  "id": "high-average-item-value",
+  "description": "A condition's left-hand side can be a computed expression, not just a field. Here the average item price (Order.Total / Order.ItemCount) must exceed 25 to qualify for white-glove handling. Use 'expression' in place of 'field'; the operator then compares the computed value to 'value'.",
+  "condition": {
+    "expression": { "op": "divide", "operands": [ { "field": "Order.Total" }, { "field": "Order.ItemCount" } ] },
+    "operator": "GreaterThan",
+    "value": 25
+  },
+  "actions": [
+    { "type": "setOutput", "target": "WhiteGloveHandling", "value": true }
+  ]
+}

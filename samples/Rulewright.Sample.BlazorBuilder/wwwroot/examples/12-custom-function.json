@@ -1,0 +1,16 @@
+{
+  "id": "weekend-surcharge",
+  "description": "The 'custom' operator delegates a leaf to a function you register on the builder. This rule needs an 'IsWeekend' function (see the examples README); without it, LoadRuleSet throws RuleCompilationException. A custom leaf may omit 'field' to receive the whole fact, or name a field to receive that value.",
+  "condition": {
+    "type": "group",
+    "operator": "AND",
+    "rules": [
+      { "field": "Order.PlacedOn", "operator": "custom", "name": "IsWeekend" },
+      { "field": "Order.Total", "operator": "GreaterThan", "value": 0 }
+    ]
+  },
+  "actions": [
+    { "type": "addToOutput", "target": "Surcharge", "value": 5 },
+    { "type": "appendToOutput", "target": "SurchargeReasons", "value": "weekend handling" }
+  ]
+}

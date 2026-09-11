@@ -1,0 +1,40 @@
+{
+  "name": "Computed action values",
+  "rules": [
+    {
+      "id": "percentage-discount",
+      "description": "An output value can be an expression over fact fields, not just a constant.",
+      "condition": { "field": "Customer.IsVip", "operator": "Equals", "value": true },
+      "actions": [
+        {
+          "type": "setOutput",
+          "target": "DiscountAmount",
+          "value": { "op": "multiply", "operands": [ { "field": "Order.Total" }, 0.1 ] }
+        },
+        {
+          "type": "setOutput",
+          "target": "Message",
+          "value": { "op": "concat", "operands": [ "Thanks ", { "field": "Customer.Name" }, ", you saved 10%!" ] }
+        }
+      ]
+    },
+    {
+      "id": "net-total",
+      "description": "Expressions nest; coalesce guards a possibly-missing discount field.",
+      "condition": { "field": "Order.Total", "operator": "GreaterThan", "value": 0 },
+      "actions": [
+        {
+          "type": "setOutput",
+          "target": "NetTotal",
+          "value": {
+            "op": "subtract",
+            "operands": [
+              { "field": "Order.Total" },
+              { "op": "coalesce", "operands": [ { "field": "Order.DiscountApplied" }, 0 ] }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "id": "vip-or-high-value-discount",
+  "description": "VIP or high-value customers over 18 get 10% off. The smallest useful document: a single rule.",
+  "priority": 10,
+  "condition": {
+    "type": "group",
+    "operator": "AND",
+    "rules": [
+      { "field": "Customer.Age", "operator": "GreaterThan", "value": 18 },
+      {
+        "type": "group",
+        "operator": "OR",
+        "rules": [
+          { "field": "Order.Total", "operator": "GreaterThanOrEqual", "value": 100 },
+          { "field": "Customer.IsVip", "operator": "Equals", "value": true }
+        ]
+      }
+    ]
+  },
+  "actions": [
+    { "type": "setOutput", "target": "Discount", "value": 10 },
+    { "type": "setOutput", "target": "DiscountReason", "value": "VIP or high-value order" }
+  ]
+}

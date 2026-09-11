@@ -4,14 +4,16 @@ Thanks for your interest! Issues, discussions, and pull requests are all welcome
 
 ## Development setup
 
-- Install the [.NET 8+ SDK](https://dotnet.microsoft.com/download). On Windows,
-  .NET Framework 4.8 (in-box on Windows 10/11) lets you run the full test matrix.
+- Install the [.NET 10 SDK](https://dotnet.microsoft.com/download) — `global.json` pins
+  `10.0.100` (rolling forward to the latest feature band). The .NET 8 runtime lets you run the
+  net8.0 leg; on Windows, .NET Framework 4.8 (in-box on Windows 10/11) completes the matrix.
 - Build & test:
 
   ```
   dotnet build Rulewright.slnx
-  dotnet test  Rulewright.slnx              # net8.0 + net48 on Windows
-  dotnet test  Rulewright.slnx -f net8.0    # net8.0 only (Linux/macOS)
+  dotnet test  Rulewright.slnx              # net8.0 + net10.0 + net48 on Windows
+  dotnet test  Rulewright.slnx -f net8.0    # Linux/macOS: run each leg — no net48 runtime there
+  dotnet test  Rulewright.slnx -f net10.0
   ```
 
 - Benchmarks (Release only):

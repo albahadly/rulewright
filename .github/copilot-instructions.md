@@ -211,12 +211,13 @@ applies these semantics rather than throwing). Preserve this exactly when changi
 
 ```
 dotnet build Rulewright.slnx
-dotnet test  Rulewright.slnx              # net8.0 + net48 (Windows)
-dotnet test  Rulewright.slnx -f net8.0    # net8.0 only (Linux/macOS — no net48 runtime there)
+dotnet test  Rulewright.slnx              # net8.0 + net10.0 + net48 (Windows)
+dotnet test  Rulewright.slnx -f net8.0    # one leg at a time (Linux/macOS — no net48 runtime)
+dotnet test  Rulewright.slnx -f net10.0
 ```
 
-Both must be **clean: 0 warnings, 0 failures** before a change is done (warnings are errors). The
-full suite is currently **376 tests per TFM**. For a Blazor sample change, a clean build is **not**
+All of these must be **clean: 0 warnings, 0 failures** before a change is done (warnings are errors). The
+full suite is currently **503 tests per TFM**. For a Blazor sample change, a clean build is **not**
 enough — these are WASM apps with no browser-automation suite: run it
 (`dotnet run --project samples/<project>`) and drive the change in a real browser. Check
 `samples/<project>/.claude/skills/verify/SKILL.md` for the launch command, key selectors, and known
@@ -241,8 +242,10 @@ Action nodes); 1 Rule node exports a bare rule, 2+ export `{ name, rules[] }`. T
 works by zipping a JS "id tree" (same shape as the built condition) against the engine's
 `ConditionTraceNode` tree positionally. **When editing this file, re-derive the invariants
 documented in its verify SKILL.md** (e.g. import uses `valueToFieldText`, not `JSON.stringify`, for
-string fields; `addConnection` auto-grows dynamic-input slots — don't pre-grow). `decisionTable`
-documents are not supported by the canvas (they show a toast).
+string fields; `addConnection` auto-grows dynamic-input slots — don't pre-grow).
+`decisionTable` documents are **expanded to rules by the real engine** before rendering: the
+`ExpandDocument` JSInvokable runs `RuleSetParser.Parse`, so the canvas shows the rules that
+would actually run rather than a JS re-implementation of the table.
 
 The Blazor sample is not a test project; changes there don't affect the test count, but must be
 browser-verified. It is deployed to GitHub Pages by

@@ -18,7 +18,7 @@ public class ExampleFilesTests
         .RegisterBuiltInFunctions()
         .Build();
 
-    private static readonly string ExamplesDirectory = FindExamplesDirectory();
+    private static readonly string ExamplesDirectory = RepositoryPaths.Examples;
 
     public static IEnumerable<object[]> ExampleFiles()
         => Directory.GetFiles(ExamplesDirectory, "*.json")
@@ -192,22 +192,5 @@ public class ExampleFilesTests
         public long Quantity { get; set; }
 
         public bool InStock { get; set; }
-    }
-
-    private static string FindExamplesDirectory()
-    {
-        DirectoryInfo? directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Rulewright.slnx"))
-                && Directory.Exists(Path.Combine(directory.FullName, "examples")))
-            {
-                return Path.Combine(directory.FullName, "examples");
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate the repository 'examples' directory.");
     }
 }

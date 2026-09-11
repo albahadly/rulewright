@@ -1,0 +1,23 @@
+{
+  "name": "Set membership",
+  "rules": [
+    {
+      "id": "priority-country",
+      "description": "In / NotIn test membership in a closed set. Values are an array.",
+      "condition": { "field": "Customer.Country", "operator": "In", "value": ["US", "CA", "GB", "DE"] },
+      "actions": [ { "type": "setOutput", "target": "FastShipping", "value": true } ]
+    },
+    {
+      "id": "excluded-category",
+      "description": "NotIn: everything except restricted product categories.",
+      "condition": { "field": "Order.Category", "operator": "NotIn", "value": ["alcohol", "tobacco", "firearms"] },
+      "actions": [ { "type": "setOutput", "target": "AgeCheckRequired", "value": false } ]
+    },
+    {
+      "id": "premium-tier",
+      "description": "In also works for plain scalars like tier names.",
+      "condition": { "field": "Customer.Tier", "operator": "In", "value": ["gold", "vip"] },
+      "actions": [ { "type": "setOutput", "target": "PremiumMember", "value": true } ]
+    }
+  ]
+}

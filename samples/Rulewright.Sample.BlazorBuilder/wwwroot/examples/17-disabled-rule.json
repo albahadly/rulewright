@@ -1,0 +1,20 @@
+{
+  "name": "Retiring a rule without deleting it",
+  "description": "'enabled: false' skips a rule entirely during evaluation — it never matches, never fires, and never contributes to StopOnFirstMatch. Useful for turning a rule off (a seasonal promo that ended, a superseded policy) while keeping it in the document for reference or a quick re-enable.",
+  "rules": [
+    {
+      "id": "legacy-flat-discount",
+      "description": "Retired: replaced by 'current-discount' below. Left in place, disabled, so its history and priority are still visible in the document.",
+      "priority": 100,
+      "enabled": false,
+      "condition": { "field": "Order.Total", "operator": "GreaterThan", "value": 0 },
+      "actions": [ { "type": "setOutput", "target": "Discount", "value": 5 } ]
+    },
+    {
+      "id": "current-discount",
+      "priority": 1,
+      "condition": { "field": "Order.Total", "operator": "GreaterThan", "value": 0 },
+      "actions": [ { "type": "setOutput", "target": "Discount", "value": 10 } ]
+    }
+  ]
+}

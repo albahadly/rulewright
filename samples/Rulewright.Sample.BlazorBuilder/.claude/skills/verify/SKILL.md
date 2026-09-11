@@ -79,6 +79,8 @@ Compare's **Field (expr)** pin (the ONLY place a condition allows a computed val
 right-hand comparison `value` must stay a constant, `RuleSetValidator` rejects an object there)
 or an Action's **Value (expr)** pin. `rules`-set docs import only rule #1 with a toast noting
 `N` total; `decisionTable` docs show a toast and leave the canvas untouched (not supported).
+**Both clauses are superseded** — see the multi-rule section (every rule of a set is imported)
+and the net10.0 section (decision tables are expanded through the engine and rendered).
 
 **Two real bugs found via this import path, both fixed** — worth re-checking after any change
 to `importRuleJson`/`importValueExpr`/`importCondition`:
@@ -183,3 +185,47 @@ Verified via `scratchpad/verify2.js` — **23/23 checks, zero console errors**: 
 chips; Add rule; import `02-rule-set-priority.json` rebuilds all 3 rules; `03` string values
 round-trip un-doubled; Tidy; all connection-kind rejections; single-rule doc still exports bare.
 Full solution builds 0-warning Release; 376 tests/TFM unaffected (no library code changed).
+
+## net10.0, local examples, and a height-aware Tidy (later session — CURRENT)
+
+Three changes, all verified in a real browser (Playwright, all 20 examples, zero console errors).
+
+**The project targets `net10.0`** (was net8.0; the libraries already shipped a net10.0 leg).
+`Directory.Packages.props` moves the two `Microsoft.AspNetCore.Components.WebAssembly*` pins to
+`10.0.10` to match, and `blazor-builder-pages.yml` now installs the 10.0.x SDK — it installed only
+8.0.x, which cannot build this project.
+
+**The examples are real files in `wwwroot/examples/` again.** A previous pass replaced them with
+`<Content Include="..\..\examples\*.json" Link="wwwroot\examples\..." />` to keep one copy in the
+repo. That silently broke the picker: the SDK's discovery pass (`DefineStaticWebAssets`, in
+`Microsoft.NET.Sdk.StaticWebAssets.targets`) matches candidates by their `Link`/`TargetPath` but
+stamps **every** asset it finds in `@(Content)` with `$(MSBuildProjectDirectory)\wwwroot\` as the
+ContentRoot. So `staticwebassets.runtime.json` mapped `examples/<file>.json` to
+`wwwroot\examples\<file>.json`, which did not exist, and every example 404'd — while
+`manifest.json` (a genuine file in wwwroot) still resolved, so the dropdown filled normally and
+only the *loading* failed. **A Blazor WASM app can only serve what physically lives under its own
+wwwroot; do not try to link files in from elsewhere.**
+
+The copy is kept honest by `tests/Rulewright.Execution.Tests/BlazorBuilderExamplesTests.cs`:
+every `examples/*.json` must have a byte-identical (newline-normalised) counterpart here, the two
+folders must hold exactly the same file names, and `manifest.json` must list exactly them. **Adding
+an example means copying it here and adding a manifest entry, or the suite fails.**
+
+**Tidy (`layoutAll`/`placeUpstream`) is height- and depth-aware.** It used a fixed `ROW_H = 140`
+slot per node and fixed columns, so (a) any node taller than one slot — a group or Expression with
+several operand rows — was overlapped by its next sibling, and (b) chained value expressions
+(`Expression <- Field Ref`), laid out leftward from `RULE_X + COL_W`, landed exactly on the Rule
+column. Now siblings stack by `nodeHeight()` + `ROW_GAP`, a parent is centred against the block its
+children occupy, and `RULE_X`/`ACTION_X` are derived from the deepest condition/value tree on the
+canvas (`upstreamDepth`) so trees can never grow back into the Fact Input or Rule columns. Nothing
+lays out to negative X any more.
+
+Regression check worth repeating after any layout change — measure overlap in world coordinates,
+reading each node's `translate(x, y)` (nodes are positioned by `transform`, **not** `left`/`top` —
+reading `style.left` silently yields `NaN` and a meaningless all-clear):
+
+```js
+const m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(el.style.transform);
+```
+
+Across the seed graph and all 20 examples: **21 overlapping node pairs before, 0 after.**

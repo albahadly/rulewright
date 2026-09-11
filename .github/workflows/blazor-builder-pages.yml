@@ -31,7 +31,10 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          # The sample targets net10.0; 8.0.x stays for the referenced libraries' down-level legs.
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Publish Rulewright.Sample.BlazorBuilder
         run: dotnet publish samples/Rulewright.Sample.BlazorBuilder/Rulewright.Sample.BlazorBuilder.csproj -c Release -o publish

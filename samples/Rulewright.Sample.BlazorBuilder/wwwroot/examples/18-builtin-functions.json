@@ -1,0 +1,19 @@
+{
+  "id": "well-formed-vip-order",
+  "description": "Rulewright.Extensions.Functions ships a small curated set of ready-made 'custom' predicates (RulewrightBuilder.RegisterBuiltInFunctions) for things the closed operator vocabulary deliberately leaves out: case-insensitive text, format checks, number parity/divisibility/sign, and date relativity. This rule combines four of them: IsEmail, EqualsIgnoreCase, DivisibleBy, and IsPositive.",
+  "condition": {
+    "type": "group",
+    "operator": "AND",
+    "rules": [
+      { "field": "Customer.Email", "operator": "custom", "name": "IsEmail" },
+      { "field": "Customer.Name", "operator": "custom", "name": "EqualsIgnoreCase", "value": "ALICE" },
+      { "field": "Order.ItemCount", "operator": "custom", "name": "DivisibleBy", "value": 3 },
+      { "field": "Order.Total", "operator": "custom", "name": "IsPositive" }
+    ]
+  },
+  "actions": [
+    { "type": "setOutput", "target": "Segment", "value": "verified-regular" },
+    { "type": "appendToOutput", "target": "Notes", "value": "email verified" },
+    { "type": "appendToOutput", "target": "Notes", "value": "order size is a clean multiple of 3 with a positive total" }
+  ]
+}

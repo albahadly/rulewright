@@ -1,0 +1,30 @@
+{
+  "name": "String matching",
+  "rules": [
+    {
+      "id": "corporate-email",
+      "description": "Ordinal StartsWith / EndsWith / Contains on strings.",
+      "condition": {
+        "type": "group",
+        "operator": "AND",
+        "rules": [
+          { "field": "Customer.Email", "operator": "EndsWith", "value": "@acme.com" },
+          { "field": "Customer.Email", "operator": "Contains", "value": "." }
+        ]
+      },
+      "actions": [ { "type": "setOutput", "target": "Segment", "value": "corporate" } ]
+    },
+    {
+      "id": "promo-coupon",
+      "description": "Coupon codes that start with SAVE.",
+      "condition": { "field": "Order.Coupon", "operator": "StartsWith", "value": "SAVE" },
+      "actions": [ { "type": "setOutput", "target": "CouponFamily", "value": "savings" } ]
+    },
+    {
+      "id": "valid-postcode",
+      "description": "MatchesRegex uses a compiled regex; anchor it yourself.",
+      "condition": { "field": "Customer.PostCode", "operator": "MatchesRegex", "value": "^[0-9]{5}(-[0-9]{4})?$" },
+      "actions": [ { "type": "setOutput", "target": "PostCodeValid", "value": true } ]
+    }
+  ]
+}

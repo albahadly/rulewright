@@ -1,0 +1,46 @@
+{
+  "name": "Fraud risk scoring",
+  "rules": [
+    {
+      "id": "high-value-order",
+      "description": "addToOutput keeps a running total across every rule that fires; appendToOutput collects a list. Together they build a score and an audit trail.",
+      "priority": 40,
+      "condition": { "field": "Order.Total", "operator": "GreaterThanOrEqual", "value": 1000 },
+      "actions": [
+        { "type": "addToOutput", "target": "RiskScore", "value": 40 },
+        { "type": "appendToOutput", "target": "RiskReasons", "value": "high-value order" }
+      ]
+    },
+    {
+      "id": "brand-new-account",
+      "priority": 30,
+      "condition": { "field": "Customer.LoyaltyYears", "operator": "LessThan", "value": 1 },
+      "actions": [
+        { "type": "addToOutput", "target": "RiskScore", "value": 25 },
+        { "type": "appendToOutput", "target": "RiskReasons", "value": "account less than a year old" }
+      ]
+    },
+    {
+      "id": "international-order",
+      "priority": 20,
+      "condition": { "field": "Customer.Country", "operator": "NotEquals", "value": "US" },
+      "actions": [
+        {
+          "type": "addToOutput",
+          "target": "RiskScore",
+          "value": { "op": "coalesce", "operands": [ { "field": "Order.InternationalPenalty" }, 15 ] }
+        },
+        { "type": "appendToOutput", "target": "RiskReasons", "value": "international order" }
+      ]
+    },
+    {
+      "id": "risk-band",
+      "description": "A low-priority rule fires last, reading the accumulated score to label the order.",
+      "priority": 0,
+      "condition": { "field": "Order.Total", "operator": "GreaterThan", "value": 0 },
+      "actions": [
+        { "type": "setOutput", "target": "Reviewed", "value": true }
+      ]
+    }
+  ]
+}

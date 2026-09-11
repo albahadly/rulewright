@@ -1,0 +1,28 @@
+{
+  "name": "Free-shipping messaging (if / else)",
+  "description": "The pre-'else' way to write if / else: since a rule fires actions only when its condition matches, the 'else' is a second rule with the negated condition. Here one branch appends a positive message and the other a different one; the two conditions are mutually exclusive, so exactly one appends to Messages. The condition is written twice (once plain, once inside NOT) and must be kept in sync — see 16-else-and-remove.json for the same thing as one rule with a first-class 'else', or 14-if-else-decision-table.json for the decision-table form.",
+  "rules": [
+    {
+      "id": "qualifies",
+      "description": "Condition met: append the positive message.",
+      "condition": { "field": "Order.Total", "operator": "GreaterThanOrEqual", "value": 100 },
+      "actions": [
+        { "type": "appendToOutput", "target": "Messages", "value": "You qualify for free shipping!" }
+      ]
+    },
+    {
+      "id": "does-not-qualify",
+      "description": "Same condition negated with a NOT group: append a different message.",
+      "condition": {
+        "type": "group",
+        "operator": "NOT",
+        "rules": [
+          { "field": "Order.Total", "operator": "GreaterThanOrEqual", "value": 100 }
+        ]
+      },
+      "actions": [
+        { "type": "appendToOutput", "target": "Messages", "value": "Add more to your cart to unlock free shipping." }
+      ]
+    }
+  ]
+}

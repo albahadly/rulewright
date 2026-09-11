@@ -410,11 +410,11 @@ illustrative and machine-specific; re-run the suite on your hardware.)*
 git clone https://github.com/albahadly/rulewright.git
 cd Rulewright
 dotnet build Rulewright.slnx
-dotnet test  Rulewright.slnx            # runs on net8.0 and net48 (Windows)
+dotnet test  Rulewright.slnx            # runs on net8.0, net10.0 and net48 (Windows)
 dotnet run --project samples/Rulewright.Sample.ConsoleApp
 ```
 
-Requires the .NET 8+ SDK. On Windows, the test suite and the
+Requires the .NET 10 SDK (`global.json` pins `10.0.100`). On Windows, the test suite and the
 `Rulewright.Sample.NetFramework48` smoke test also exercise .NET Framework 4.8.
 
 ## Packages

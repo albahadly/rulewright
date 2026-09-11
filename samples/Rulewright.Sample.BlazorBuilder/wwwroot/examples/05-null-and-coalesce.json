@@ -1,0 +1,30 @@
+{
+  "name": "Null handling",
+  "rules": [
+    {
+      "id": "flag-missing-email",
+      "description": "IsNull / IsNotNull take no value. A missing dictionary key or a null along a path resolves to null.",
+      "condition": { "field": "Customer.Email", "operator": "IsNull" },
+      "actions": [ { "type": "setOutput", "target": "NeedsEmail", "value": true } ]
+    },
+    {
+      "id": "safe-greeting",
+      "description": "coalesce supplies a default when a field is null, so the message never says 'Hello, !'.",
+      "condition": { "field": "Order.Total", "operator": "IsNotNull" },
+      "actions": [
+        {
+          "type": "setOutput",
+          "target": "Greeting",
+          "value": {
+            "op": "concat",
+            "operands": [
+              "Hello, ",
+              { "op": "coalesce", "operands": [ { "field": "Customer.Name" }, "there" ] },
+              "!"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

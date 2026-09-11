@@ -1,0 +1,19 @@
+{
+  "decisionTable": {
+    "name": "Category pricing adjustment",
+    "id": "pricing",
+    "hitPolicy": "first",
+    "description": "A decision table 'then' cell is not limited to a constant — it is parsed as an expression, just like an ordinary action's 'value'. Here each matching category computes AdjustedTotal from Order.Total instead of writing a fixed number; the wildcard catch-all row passes the total through unchanged.",
+    "inputs": [
+      { "field": "Order.Category", "operator": "Equals" }
+    ],
+    "outputs": [
+      { "target": "AdjustedTotal", "type": "setOutput" }
+    ],
+    "rows": [
+      { "when": ["books"], "then": [ { "op": "multiply", "operands": [ { "field": "Order.Total" }, 0.9 ] } ] },
+      { "when": ["electronics"], "then": [ { "op": "multiply", "operands": [ { "field": "Order.Total" }, 1.05 ] } ] },
+      { "when": [null], "then": [ { "field": "Order.Total" } ] }
+    ]
+  }
+}

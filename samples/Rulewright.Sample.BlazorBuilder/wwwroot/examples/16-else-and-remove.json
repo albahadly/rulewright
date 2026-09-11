@@ -1,0 +1,27 @@
+{
+  "name": "Loyalty perks (first-class else + removeOutput)",
+  "description": "A rule can carry an 'else' branch that fires when its condition is false, so an if/else is a single rule instead of a rule plus its negated twin (compare 13-if-else-append.json). 'tier-perk' sets a badge either way. Separately, 'grant-discount' offers a discount to everyone, and a lower-priority rule withdraws it for small orders with 'removeOutput' — undoing an earlier rule's write.",
+  "rules": [
+    {
+      "id": "tier-perk",
+      "description": "VIPs get a gold badge; everyone else gets standard — one rule, both branches.",
+      "condition": { "field": "Customer.IsVip", "operator": "Equals", "value": true },
+      "actions": [ { "type": "setOutput", "target": "Badge", "value": "gold" } ],
+      "else": [ { "type": "setOutput", "target": "Badge", "value": "standard" } ]
+    },
+    {
+      "id": "grant-discount",
+      "priority": 10,
+      "description": "Offer a provisional discount to every order.",
+      "condition": { "field": "Order.Total", "operator": "IsNotNull" },
+      "actions": [ { "type": "setOutput", "target": "Discount", "value": 10 } ]
+    },
+    {
+      "id": "revoke-small-orders",
+      "priority": 5,
+      "description": "…but withdraw it below the minimum spend — removeOutput undoes the earlier write.",
+      "condition": { "field": "Order.Total", "operator": "LessThan", "value": 50 },
+      "actions": [ { "type": "removeOutput", "target": "Discount" } ]
+    }
+  ]
+}
