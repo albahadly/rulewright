@@ -369,7 +369,7 @@ Several rules in one document:
 - **`enabled: false`** — retires a rule without deleting it. It is skipped entirely.
 - **`description`** and **`layout`** — free-text and UI metadata; the engine ignores both.
 
-Stop after the first match:
+Stop after the first match — the caller's choice, for one evaluation:
 
 ```csharp
 var result = engine.Evaluate(rules, fact, new EvaluationOptions { StopOnFirstMatch = true });
@@ -377,6 +377,18 @@ var result = engine.Evaluate(rules, fact, new EvaluationOptions { StopOnFirstMat
 
 `EvaluationOptions` is immutable — set it with an object initializer. (Don't try to mutate
 `EvaluationOptions.Default`; it is shared and read-only by design.)
+
+- **`stopAfterFirstMatch`** — the same thing as the *set's own* semantics, stated in the document:
+
+  ```json
+  { "name": "Shipping", "stopAfterFirstMatch": true, "rules": [ ... ] }
+  ```
+
+  Evaluation stops after the first rule whose condition passes, whatever the caller asks for. This
+  is what a `first`-hit-policy decision table (§7) expands into, so a tool that rewrites a table as
+  its equivalent rules can say so rather than silently producing a collecting set. The two combine
+  with OR: a caller can stop a collecting set early, but cannot turn this one into a collecting
+  one. Omitted means `false`, so documents written before this property keep their behaviour.
 
 ## 7. Decision tables
 

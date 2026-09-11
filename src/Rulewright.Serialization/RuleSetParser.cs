@@ -42,13 +42,19 @@ public static class RuleSetParser
                 ? nameValue.GetString()
                 : null;
 
+            // The set's own semantics, the same flag a `first` decision table produces. Absent
+            // means collect, so every document written before this property keeps its behaviour.
+            bool stopAfterFirstMatch =
+                document.TryGetProperty("stopAfterFirstMatch", out RuleJsonValue stopValue)
+                && stopValue.Kind == RuleJsonValueKind.True;
+
             var parsed = new List<Rule>(rules.Items.Count);
             foreach (RuleJsonValue rule in rules.Items)
             {
                 parsed.Add(ParseRule(rule));
             }
 
-            return new RuleSet(parsed, name);
+            return new RuleSet(parsed, name, stopAfterFirstMatch);
         }
 
         return new RuleSet(new[] { ParseRule(document) });

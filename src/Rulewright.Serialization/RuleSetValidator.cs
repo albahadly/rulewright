@@ -60,7 +60,7 @@ public static class RuleSetValidator
     }
 
     private static readonly string[] DecisionTableDocumentProperties = { "decisionTable" };
-    private static readonly string[] RuleSetProperties = { "name", "description", "rules" };
+    private static readonly string[] RuleSetProperties = { "name", "description", "stopAfterFirstMatch", "rules" };
     private static readonly string[] RuleProperties = { "id", "description", "priority", "enabled", "condition", "actions", "else", "layout" };
     private static readonly string[] GroupProperties = { "type", "operator", "rules" };
     private static readonly string[] LeafProperties = { "field", "expression", "operator", "value", "name", "condition" };
@@ -110,6 +110,13 @@ public static class RuleSetValidator
             && setDescription.Kind != RuleJsonValueKind.String)
         {
             errors.Add(new RuleValidationError("/description", "'description' must be a string."));
+        }
+
+        if (ruleSet.TryGetProperty("stopAfterFirstMatch", out RuleJsonValue stopAfterFirstMatch)
+            && stopAfterFirstMatch.Kind is not (RuleJsonValueKind.True or RuleJsonValueKind.False))
+        {
+            errors.Add(new RuleValidationError(
+                "/stopAfterFirstMatch", "'stopAfterFirstMatch' must be a boolean."));
         }
 
         ruleSet.TryGetProperty("rules", out RuleJsonValue rules);

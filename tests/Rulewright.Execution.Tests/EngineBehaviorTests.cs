@@ -49,6 +49,31 @@ public class EngineBehaviorTests
         Assert.False(lowTrace.Fired);
     }
 
+    /// <summary>
+    /// The document's own "stop after the first match", rather than the caller's option. A tool
+    /// that expands a `first` decision table into its equivalent rules writes this, so the expanded
+    /// form must evaluate the same way the table did.
+    /// </summary>
+    [Fact]
+    public void StopAfterFirstMatchDocument_SkipsRemainingRules_WithoutTheCallerAskingForIt()
+    {
+        LoadedRuleSet loaded = Engine.LoadRuleSet(
+            "{ \"stopAfterFirstMatch\": true, " + TwoRuleSet.TrimStart().TrimStart('{'));
+
+        // Default options: the caller does NOT pass StopOnFirstMatch.
+        RuleEvaluationResult result = Engine.Evaluate(loaded, DefaultFact(), new EvaluationOptions { EnableTrace = true });
+
+        FiredRule fired = Assert.Single(result.FiredRules);
+        Assert.Equal("high", fired.RuleId);
+        Assert.Equal(10L, result.Outputs["Discount"]);
+        Assert.True(result.Trace!.Rules.Single(r => r.RuleId == "low").Skipped);
+    }
+
+    /// <summary>Absent means collect - every document written before the property is unaffected.</summary>
+    [Fact]
+    public void WithoutTheDocumentFlag_AllMatchingRulesStillFire()
+        => Assert.Equal(2, Engine.Evaluate(Engine.LoadRuleSet(TwoRuleSet), DefaultFact()).FiredRules.Count);
+
     [Fact]
     public void EqualPriority_KeepsDocumentOrder()
     {

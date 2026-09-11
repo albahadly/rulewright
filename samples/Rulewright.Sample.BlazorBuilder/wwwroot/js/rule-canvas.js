@@ -24,6 +24,7 @@ window.rulewrightFlowBuilder = (function(){
     rule:      { label:"Rule",            badge:"§",   color:"var(--accent-gold)",   tagPrefix:"RULE",hasInput:true,  isAction:false, isRule:true, portLabels:["Condition"] },
     leaf:      { label:"Compare",         badge:"=",   color:"var(--accent-blue)",   tagPrefix:"CMP", hasInput:true,  isAction:false, portLabels:["Field (expr)"] },
     function:  { label:"Custom Function", badge:"ƒ",   color:"var(--accent-blue)",   tagPrefix:"FN",  hasInput:false, isAction:false },
+    quant:     { label:"Collection Test",  badge:"∀",   color:"var(--accent-blue)",   tagPrefix:"QNT", hasInput:true,  isAction:false, portLabels:["Element condition"] },
     and:       { label:"AND Group",       badge:"∧",   color:"var(--accent-copper)", tagPrefix:"GRP", hasInput:true,  isAction:false, dynamicInput:true, dynamicLabel:"Input", operator:"AND" },
     or:        { label:"OR Group",        badge:"∨",   color:"var(--accent-copper)", tagPrefix:"GRP", hasInput:true,  isAction:false, dynamicInput:true, dynamicLabel:"Input", operator:"OR" },
     not:       { label:"NOT Group",       badge:"¬",   color:"var(--accent-copper)", tagPrefix:"GRP", hasInput:true,  isAction:false, dynamicInput:true, dynamicLabel:"Input", operator:"NOT", maxInputs:1 },
@@ -37,9 +38,12 @@ window.rulewrightFlowBuilder = (function(){
     "Equals","NotEquals","GreaterThan","GreaterThanOrEqual","LessThan","LessThanOrEqual",
     "Contains","StartsWith","EndsWith","MatchesRegex","In","NotIn","IsNull","IsNotNull"
   ];
+  // Quantifiers are NOT in OPERATORS: they take a per-element condition instead of a value, so
+  // they are their own node type (quant) rather than a Compare operator.
+  const QUANTIFIERS = ["Any","All","None"];
   const ACTION_TYPES = ["setOutput","addToOutput","appendToOutput","removeOutput"];
-  const EXPR_OPERATORS = ["add","subtract","multiply","divide","modulo","negate","concat","coalesce"];
-  const EXPR_ARITY = { negate:{min:1,max:1}, subtract:{min:2,max:2}, divide:{min:2,max:2}, modulo:{min:2,max:2} };
+  const EXPR_OPERATORS = ["add","subtract","multiply","divide","modulo","negate","concat","coalesce","count"];
+  const EXPR_ARITY = { negate:{min:1,max:1}, count:{min:1,max:1}, subtract:{min:2,max:2}, divide:{min:2,max:2}, modulo:{min:2,max:2} };
 
   /* ============================================================
      State
@@ -61,7 +65,10 @@ window.rulewrightFlowBuilder = (function(){
     sampleFact: {
       Customer: { Age: 34, IsVip: true },
       Order: { Total: 120 }
-    }
+    },
+    // The rule set's own "stop after the first matching rule" semantics - what a `first` decision
+    // table expands into. It belongs to the set, so no node owns it.
+    stopAfterFirstMatch: false
   };
 
   let dotNetRef = null;
@@ -173,6 +180,7 @@ window.rulewrightFlowBuilder = (function(){
     if(type === 'rule') return { id:"", description:"", priority:0, enabled:true };
     if(type === 'leaf') return { field:"", operator:"GreaterThan", value:"" };
     if(type === 'function') return { name:"", field:"", value:"" };
+    if(type === 'quant') return { field:"", operator:"Any" };
     if(type === 'action') return { type:"setOutput", branch:"then", target:"", value:"" };
     if(type === 'valLiteral') return { value:"null" };
     if(type === 'valField') return { field:"" };
@@ -279,6 +287,10 @@ window.rulewrightFlowBuilder = (function(){
       }
       return `<span class="summary">${escapeHtml(lhs)} ${escapeHtml(opSym)} ${escapeHtml(String(node.config.value))}</span>`;
     }
+    if(t === 'quant'){
+      const field = node.config.field || '(unset)';
+      return `<span class="summary">${escapeHtml(node.config.operator)} of ${escapeHtml(field)}</span>`;
+    }
     if(t === 'function'){
       if(!node.config.name) return `<span class="placeholder">Click to configure…</span>`;
       const field = node.config.field ? escapeHtml(node.config.field) : 'fact';
@@ -355,13 +367,14 @@ window.rulewrightFlowBuilder = (function(){
     const t = node.type;
     if(t === 'rule') return 'rule';
     if(t === 'valLiteral' || t === 'valField' || t === 'valOp') return 'value';
-    if(t === 'leaf' || t === 'function' || t === 'and' || t === 'or' || t === 'not') return 'condition';
+    if(t === 'leaf' || t === 'function' || t === 'quant' || t === 'and' || t === 'or' || t === 'not') return 'condition';
     return null; // trigger — reference-only, has no output port
   }
   function inputPortKind(node, idx){
     const t = node.type;
     if(t === 'rule') return 'condition';                // the Condition pin
     if(t === 'leaf') return 'value';                    // the Field (expr) pin
+    if(t === 'quant') return 'condition';               // the per-element condition
     if(t === 'action') return idx === 0 ? 'rule' : 'value';
     if(t === 'and' || t === 'or' || t === 'not') return 'condition';
     if(t === 'valOp') return 'value';                   // operand pins
@@ -587,6 +600,11 @@ window.rulewrightFlowBuilder = (function(){
       html += `<div class="field"><label>Operator</label><select id="cfgOperator">${OPERATORS.map(o=>`<option value="${o}" ${o===node.config.operator?'selected':''}>${o}</option>`).join('')}</select></div>
         <div class="field" id="valueFieldWrap" style="${['IsNull','IsNotNull'].includes(node.config.operator)?'display:none;':''}"><label>Value (constant)</label><input type="text" id="cfgValue" placeholder='18 or true or ["a","b"]' value="${escapeHtml(node.config.value)}"></div>
         <div class="insp-note">A condition's comparison value must be a constant — only its left-hand side can be a computed expression (wire into the Field (expr) pin).</div>`;
+    } else if(node.type === 'quant'){
+      html += `<div class="field"><label>Collection field path</label>
+        <input type="text" id="cfgField" placeholder="Order.Lines" value="${escapeHtml(node.config.field)}"></div>
+        <div class="field"><label>Quantifier</label><select id="cfgOperator">${QUANTIFIERS.map(o=>`<option value="${o}" ${o===node.config.operator?'selected':''}>${o}</option>`).join('')}</select></div>
+        <div class="insp-note">Wire the condition applied to <strong>each element</strong> into the Element condition pin. Field paths inside it resolve against the element, and <code>$</code> is the element itself (for a collection of scalars). <strong>All</strong> is true for an empty collection; every quantifier is false when the field is null.</div>`;
     } else if(node.type === 'function'){
       html += `<div class="field"><label>Function name</label><input type="text" id="cfgName" placeholder="IsBusinessDay" value="${escapeHtml(node.config.name)}"></div>
         <div class="field"><label>Field path (optional)</label><input type="text" id="cfgField" placeholder="Customer.Email" value="${escapeHtml(node.config.field)}"></div>
@@ -646,6 +664,10 @@ window.rulewrightFlowBuilder = (function(){
       });
       const vf = document.getElementById('cfgValue');
       if(vf) vf.addEventListener('input', (e)=>{ node.config.value=e.target.value; renderNode(node); regenerateJson(); });
+    }
+    if(node.type === 'quant'){
+      document.getElementById('cfgField').addEventListener('input', (e)=>{ node.config.field=e.target.value; renderNode(node); regenerateJson(); });
+      document.getElementById('cfgOperator').addEventListener('change', (e)=>{ node.config.operator=e.target.value; renderNode(node); regenerateJson(); });
     }
     if(node.type === 'function'){
       document.getElementById('cfgName').addEventListener('input', (e)=>{ node.config.name=e.target.value; renderNode(node); regenerateJson(); });
@@ -878,6 +900,22 @@ window.rulewrightFlowBuilder = (function(){
       }
       return { json:leaf, idTree:{ id:node.id, children:[] } };
     }
+    if(node.type === 'quant'){
+      if(!node.config.field) warnings.push(`${node.tag}: missing collection field path`);
+      const elemConn = node.inputs[0] && state.connections.get(node.inputs[0]);
+      const elem = elemConn ? buildConditionTree(elemConn.from, warnings, seen) : null;
+      if(!elem){
+        warnings.push(`${node.tag}: ${node.config.operator} needs a condition wired into its Element condition pin.`);
+        return null;
+      }
+      // A quantifier is ONE trace node — ConditionDescriber renders the element condition inline
+      // because per-element results have no single slot — so the id tree stops here even though
+      // the JSON nests. Adding children would knock the positional zip against the trace out of step.
+      return {
+        json: { field: node.config.field || "", operator: node.config.operator, condition: elem.json },
+        idTree: { id:node.id, children:[] }
+      };
+    }
     if(node.type === 'function'){
       if(!node.config.name) warnings.push(`${node.tag}: missing function name`);
       const fn = { operator:'custom', name: node.config.name||"" };
@@ -987,6 +1025,7 @@ window.rulewrightFlowBuilder = (function(){
     } else {
       const ordered = [...units].sort((a,b)=> (b.rule.priority - a.rule.priority));
       doc = { name: setName || "rule-set", rules: ordered.map(u=>u.rule) };
+      if(state.stopAfterFirstMatch) doc.stopAfterFirstMatch = true;
     }
 
     return { doc, warnings, units, multi: units.length > 1 };
@@ -1426,6 +1465,11 @@ window.rulewrightFlowBuilder = (function(){
     if(btnTidy) btnTidy.addEventListener('click', tidy);
     const btnAddRule = document.getElementById('btnAddRule');
     if(btnAddRule) btnAddRule.addEventListener('click', addRuleNode);
+    const stopFirst = document.getElementById('ruleSetStopFirst');
+    if(stopFirst) stopFirst.addEventListener('change', (e)=>{
+      setStopAfterFirstMatch(e.target.checked);
+      regenerateJson();
+    });
   }
 
   /* ============================================================
@@ -1477,6 +1521,16 @@ window.rulewrightFlowBuilder = (function(){
         const child = importCondition(childCond);
         addConnection(child.id, n.id, i);
       });
+      return n;
+    }
+    if(cond && QUANTIFIERS.includes(cond.operator)){
+      const n = createNode('quant', 0, 0);
+      n.config.field = cond.field || '';
+      n.config.operator = cond.operator;
+      if(cond.condition){
+        const child = importCondition(cond.condition);
+        addConnection(child.id, n.id, 0);
+      }
       return n;
     }
     if(cond && cond.operator === 'custom'){
@@ -1534,6 +1588,7 @@ window.rulewrightFlowBuilder = (function(){
 
   function importDocument(doc){
     clearGraph();
+    setStopAfterFirstMatch(doc.stopAfterFirstMatch);
     const setName = document.getElementById('ruleSetName');
     if(setName) setName.value = (doc && doc.name) || '';
     createNode('trigger', FACT_X, 40);
@@ -1553,7 +1608,7 @@ window.rulewrightFlowBuilder = (function(){
     const respText = await dotNetRef.invokeMethodAsync('ExpandDocument', JSON.stringify(doc));
     const resp = JSON.parse(respText);
     if(!resp.ok){ showToast("Couldn't expand that document: " + resp.error, 'error'); return null; }
-    return { name: resp.name, rules: resp.rules };
+    return { name: resp.name, stopAfterFirstMatch: resp.stopAfterFirstMatch, rules: resp.rules };
   }
 
   async function loadDocIntoCanvas(doc, sourceLabel){
@@ -1578,7 +1633,11 @@ window.rulewrightFlowBuilder = (function(){
         if(expanded) showToast("That decision table expanded to no rules.", 'error');
         return false;
       }
-      importDocument({ name: expanded.name || 'decision-table', rules: expanded.rules });
+      importDocument({
+        name: expanded.name || 'decision-table',
+        stopAfterFirstMatch: expanded.stopAfterFirstMatch,
+        rules: expanded.rules,
+      });
       showToast(`Expanded a decision table into ${expanded.rules.length} rule${expanded.rules.length===1?'':'s'}${label}.`, 'success');
       return true;
     }
@@ -1591,8 +1650,23 @@ window.rulewrightFlowBuilder = (function(){
     return true;
   }
 
+  // The example picker shows which example the canvas came from, so every other way of replacing
+  // the canvas has to clear it rather than leave it naming a document that is no longer loaded.
+  function setStopAfterFirstMatch(value){
+    state.stopAfterFirstMatch = value === true;
+    const box = document.getElementById('ruleSetStopFirst');
+    if(box) box.checked = state.stopAfterFirstMatch;
+  }
+
+  function clearExampleSelection(){
+    const select = document.getElementById('exampleSelect');
+    if(select) select.value = "";
+  }
+
   function newCanvas(){
+    clearExampleSelection();
     clearGraph();
+    setStopAfterFirstMatch(false);
     const setName = document.getElementById('ruleSetName');
     if(setName) setName.value = '';
     createNode('trigger', FACT_X, 40);
@@ -1605,6 +1679,18 @@ window.rulewrightFlowBuilder = (function(){
   function initExamples(){
     const select = document.getElementById('exampleSelect');
     if(!select) return;
+
+    // The placeholder is the label for "no example loaded", not a choice: hidden keeps it out of
+    // the open list and disabled keeps it unpickable. defaultSelected is what stops the browser
+    // skipping past a disabled placeholder to the first real example when the options below are
+    // appended - without it the picker opens naming an example the canvas never loaded.
+    const placeholder = select.querySelector('option[value=""]');
+    if(placeholder){
+      placeholder.disabled = true;
+      placeholder.hidden = true;
+      placeholder.defaultSelected = true;
+    }
+
     fetch('examples/manifest.json').then(r=>r.json()).then(list=>{
       list.forEach(e=>{
         const opt = document.createElement('option');
@@ -1613,20 +1699,25 @@ window.rulewrightFlowBuilder = (function(){
         opt.textContent = e.file;
         select.appendChild(opt);
       });
+      // Appending re-runs the browser's selection reset; put the placeholder back if it moved.
+      if(placeholder && !select.value) placeholder.selected = true;
     }).catch(()=>{ /* examples are optional */ });
 
     select.addEventListener('change', async (e)=>{
       const file = e.target.value;
       if(!file) return;
+      let loaded = false;
       try{
         const res = await fetch('examples/' + file);
         if(!res.ok) throw new Error('HTTP ' + res.status);
         const doc = await res.json();
-        await loadDocIntoCanvas(doc, `"${file}"`);
+        loaded = await loadDocIntoCanvas(doc, `"${file}"`);
       }catch(err){
         showToast("Couldn't load that example.", 'error');
       }
-      select.value = "";
+      // The selection stays on what the canvas is actually showing. A load that failed put nothing
+      // there, so that one goes back to the placeholder.
+      if(!loaded) select.value = "";
     });
   }
 
@@ -1644,7 +1735,7 @@ window.rulewrightFlowBuilder = (function(){
       let doc;
       try{ doc = JSON.parse(text); }
       catch(err){ showToast("That isn't valid JSON.", 'error'); return; }
-      if(await loadDocIntoCanvas(doc)) close();
+      if(await loadDocIntoCanvas(doc)){ clearExampleSelection(); close(); }
     });
   }
 

@@ -135,6 +135,7 @@ strong-named, and ship symbols (`.snupkg`) with Source Link.
 | Term | Meaning |
 |---|---|
 | **Rule** | `id` + condition tree + `actions` (+ optional `else` actions, `priority`, `enabled`, ignored `layout`). |
+| **Rule set** | `rules` (+ optional `name`, `description`, and `stopAfterFirstMatch` — stop at the first rule that passes, which is what a `first` decision table expands into). |
 | **Condition** | A leaf (`field` / `operator` / `value`) or a group (`AND` / `OR` / `NOT` over children). |
 | **Fact** | The object a rule set is evaluated against: a typed POCO (compiled path) or an `IDictionary<string, object>` (interpreted path). |
 | **Action** | Changes the outputs at `target`. `setOutput` replaces, `addToOutput` sums, `appendToOutput` collects into a list, `removeOutput` deletes. Runs from `actions` when the condition matches, or `else` when it does not. |

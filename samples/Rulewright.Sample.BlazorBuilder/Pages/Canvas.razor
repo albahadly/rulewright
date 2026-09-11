@@ -82,6 +82,10 @@
       <div class="palette-badge">=</div>
       <div class="palette-label">Compare</div>
     </div>
+    <div class="palette-item" draggable="true" data-type="quant" style="--item-color:var(--accent-blue)">
+      <div class="palette-badge">∀</div>
+      <div class="palette-label">Collection Test</div>
+    </div>
     <div class="palette-item" draggable="true" data-type="function" style="--item-color:var(--accent-blue)">
       <div class="palette-badge">ƒ</div>
       <div class="palette-label">Custom Function</div>
@@ -144,6 +148,10 @@
       <div class="field">
         <label>Set name (used when 2+ rules)</label>
         <input type="text" id="ruleSetName" placeholder="discount-rules" value="discount-rules">
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="ruleSetStopFirst">
+        <label for="ruleSetStopFirst" title="Evaluation stops after the first rule whose condition passes — the 'first' hit policy of a decision table.">Stop after first match (2+ rules)</label>
       </div>
       <button class="tbtn add-rule-btn" id="btnAddRule" title="Add a new Rule node to the canvas">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 3.5v9M3.5 8h9" /></svg>
@@ -323,7 +331,14 @@
             RuleJsonValue document = EngineService.JsonReader.Read(json);
             RuleSet ruleSet = RuleSetParser.Parse(document);
             var rules = ruleSet.Rules.Select(RuleToJson).ToArray();
-            return JsonSerializer.Serialize(new { ok = true, error = (string?)null, name = ruleSet.Name, rules });
+            return JsonSerializer.Serialize(new
+            {
+                ok = true,
+                error = (string?)null,
+                name = ruleSet.Name,
+                stopAfterFirstMatch = ruleSet.StopAfterFirstMatch,
+                rules,
+            });
         }
         catch (Exception ex)
         {
@@ -365,6 +380,16 @@
             lo["name"] = leaf.FunctionName;
             if (leaf.Field is not null) lo["field"] = leaf.Field;
             if (leaf.Value is not null) lo["value"] = leaf.Value;
+            return lo;
+        }
+
+        // A quantifier reads a collection from 'field' and tests each element with a nested
+        // 'condition', so it carries that condition in place of a 'value'.
+        if (ConditionLeaf.IsQuantifier(leaf.Operator))
+        {
+            lo["field"] = leaf.Field;
+            lo["operator"] = ConditionOperatorToJson(leaf.Operator);
+            lo["condition"] = ConditionToJson(leaf.ElementCondition!);
             return lo;
         }
 

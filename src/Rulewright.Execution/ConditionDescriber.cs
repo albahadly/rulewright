@@ -72,7 +72,11 @@ internal static class ConditionDescriber
         ExpressionOperator.Modulo => "modulo",
         ExpressionOperator.Negate => "negate",
         ExpressionOperator.Concat => "concat",
-        _ => "coalesce",
+        ExpressionOperator.Coalesce => "coalesce",
+        ExpressionOperator.Count => "count",
+        // Named explicitly rather than folded into a catch-all: a catch-all silently renders every
+        // operator added later under the last one's name, which is how count once traced as coalesce.
+        _ => @operator.ToString().ToLowerInvariant(),
     };
 
     private static string OperatorName(ConditionOperator @operator) => @operator switch
