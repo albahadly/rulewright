@@ -18,4 +18,4 @@ labels: enhancement
 ## Scope check
 
 - [ ] This does not require forward-chaining/inference (a v1 non-goal — see README)
-- [ ] This keeps `Rulewright.Core` zero-dependency and netstandard2.0-compatible
+- [ ] This keeps `RuleWright.Core` zero-dependency and netstandard2.0-compatible

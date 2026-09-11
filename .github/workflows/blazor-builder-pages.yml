@@ -1,4 +1,4 @@
-name: Deploy Rulewright Editor
+name: Deploy RuleWright Editor
 
 on:
   workflow_dispatch: {}
@@ -6,7 +6,7 @@ on:
     branches:
       - main
     paths:
-      - samples/Rulewright.Sample.BlazorBuilder/**
+      - samples/RuleWright.Sample.BlazorBuilder/**
       - .github/workflows/blazor-builder-pages.yml
 
 permissions:
@@ -36,8 +36,8 @@ jobs:
             8.0.x
             10.0.x
 
-      - name: Publish Rulewright.Sample.BlazorBuilder
-        run: dotnet publish samples/Rulewright.Sample.BlazorBuilder/Rulewright.Sample.BlazorBuilder.csproj -c Release -o publish
+      - name: Publish RuleWright.Sample.BlazorBuilder
+        run: dotnet publish samples/RuleWright.Sample.BlazorBuilder/RuleWright.Sample.BlazorBuilder.csproj -c Release -o publish
 
       - name: Configure project-site path and SPA fallback
         run: |

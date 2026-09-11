@@ -29,6 +29,6 @@ labels: bug
 
 ## Environment
 
-- Rulewright version / commit:
+- RuleWright version / commit:
 - Runtime: (.NET 8 / .NET Framework 4.8 / other)
 - OS:

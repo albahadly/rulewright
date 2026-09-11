@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Built-in custom functions and registration/discovery helpers for RuleWright (the 'custom' operator).</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RuleWright.Core\RuleWright.Core.csproj" />
+    <ProjectReference Include="..\RuleWright.Execution\RuleWright.Execution.csproj" />
+  </ItemGroup>
+
+</Project>

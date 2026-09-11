@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>RuleWright execution engine: expression-tree rule compiler, dynamic-fact interpreter fallback, thread-safe compiled delegate cache, and the RuleWrightBuilder/RuleWrightEngine public API.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RuleWright.Core\RuleWright.Core.csproj" />
+    <ProjectReference Include="..\RuleWright.Serialization\RuleWright.Serialization.csproj" />
+  </ItemGroup>
+
+</Project>

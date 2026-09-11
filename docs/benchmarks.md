@@ -1,27 +1,27 @@
 # Benchmarks
 
-The benchmark suite lives in `tests/Rulewright.Benchmarks` (BenchmarkDotNet) and covers three
-things: Rulewright's own warm-path throughput, its cold-start cost, and a like-for-like
+The benchmark suite lives in `tests/RuleWright.Benchmarks` (BenchmarkDotNet) and covers three
+things: RuleWright's own warm-path throughput, its cold-start cost, and a like-for-like
 comparison against **NRules** and **Microsoft RulesEngine**.
 
 ```
-# Rulewright throughput and cold start
-dotnet run -c Release --project tests/Rulewright.Benchmarks -- --filter '*EvaluationBenchmarks*'
-dotnet run -c Release --project tests/Rulewright.Benchmarks -- --filter '*ColdStartBenchmarks*'
+# RuleWright throughput and cold start
+dotnet run -c Release --project tests/RuleWright.Benchmarks -- --filter '*EvaluationBenchmarks*'
+dotnet run -c Release --project tests/RuleWright.Benchmarks -- --filter '*ColdStartBenchmarks*'
 
 # Comparison against NRules and Microsoft RulesEngine
-dotnet run -c Release --project tests/Rulewright.Benchmarks -- --filter '*EngineComparison*'
+dotnet run -c Release --project tests/RuleWright.Benchmarks -- --filter '*EngineComparison*'
 
 # Confirm the three engines agree on which rules match (fairness check)
-dotnet run -c Release --project tests/Rulewright.Benchmarks -- verify
+dotnet run -c Release --project tests/RuleWright.Benchmarks -- verify
 ```
 
 > The numbers below were captured with `--job short` (3 warmup + 3 measured iterations) on the
 > machine noted under each table. They are **illustrative, not a spec** — absolute times depend
 > on hardware, and short jobs have wider error bars than a full run. Re-run the suite on your own
-> hardware for numbers you can hold Rulewright to; the **ratios** are the portable part.
+> hardware for numbers you can hold RuleWright to; the **ratios** are the portable part.
 
-## Rulewright throughput (warm)
+## RuleWright throughput (warm)
 
 Compiled delegates (typed facts) vs the interpreter (dictionary facts), with and without
 tracing, evaluated once per call against a pre-loaded, pre-warmed rule set.
@@ -63,7 +63,7 @@ Compilation to expression-tree delegates is the dominant first-call cost (and it
 noisy — it is JIT-bound). It happens **once per rule content hash** and is then cached, so steady
 state is the warm row. Load a rule set at startup, or accept a slow first request per rule.
 
-## Comparison: Rulewright vs NRules vs Microsoft RulesEngine
+## Comparison: RuleWright vs NRules vs Microsoft RulesEngine
 
 The same logical rule set — `Customer.Age > threshold AND (Order.Total >= 100 OR Customer.IsVip)`,
 one rule per threshold — is built in all three engines and evaluated against the **same typed
@@ -73,17 +73,17 @@ of 100), so this measures the cost of the *same decision*, not different amounts
 
 *BenchmarkDotNet v0.15.8 · .NET 8.0.29 · 13th Gen Intel Core i9-13980HX · Windows 11*
 
-| Engine | Rules | Mean | vs Rulewright | Allocated | vs Rulewright |
+| Engine | Rules | Mean | vs RuleWright | Allocated | vs RuleWright |
 |---|--:|--:|--:|--:|--:|
-| **Rulewright** (compiled) | 10 | **890 ns** | 1.0× | **2.0 KB** | 1.0× |
+| **RuleWright** (compiled) | 10 | **890 ns** | 1.0× | **2.0 KB** | 1.0× |
 | Microsoft RulesEngine | 10 | 1.95 µs | 2.2× | 7.3 KB | 3.6× |
 | NRules (Rete) | 10 | 7.02 µs | 7.9× | 32.4 KB | 16× |
-| **Rulewright** (compiled) | 100 | **9.5 µs** | 1.0× | **14.2 KB** | 1.0× |
+| **RuleWright** (compiled) | 100 | **9.5 µs** | 1.0× | **14.2 KB** | 1.0× |
 | Microsoft RulesEngine | 100 | 15.1 µs | 1.6× | 63.1 KB | 4.5× |
 | NRules (Rete) | 100 | 66.9 µs | 7.0× | 289 KB | 20× |
 
 For this **stateless, one-shot** pattern — "evaluate this fact against these rules, right now" —
-Rulewright is the fastest and by far the leanest allocator. Why the others differ, stated fairly:
+RuleWright is the fastest and by far the leanest allocator. Why the others differ, stated fairly:
 
 - **NRules** is a **Rete inference engine**, built for a *long-lived working memory* where facts
   are inserted and updated incrementally and rules chain off each other's conclusions. That is a
@@ -93,7 +93,7 @@ Rulewright is the fastest and by far the leanest allocator. Why the others diffe
   shape — these numbers do not describe NRules' strength.
 - **Microsoft RulesEngine** compiles **C# expression *strings*** embedded in the rule JSON. It is
   competitive on speed but allocates several times more, and the model means arbitrary code in
-  rule files plus runtime string compilation — the trade-off Rulewright's closed, pure-data
+  rule files plus runtime string compilation — the trade-off RuleWright's closed, pure-data
   vocabulary deliberately avoids (see the README's comparison table).
 
 The methodology is in `ComparisonBenchmarks.cs`; the `verify` command lets you confirm the

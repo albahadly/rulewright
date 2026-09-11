@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <!-- The point of this project: prove the netstandard2.0 build of RuleWright works on
+         .NET Framework 4.8 end-to-end, not just as a TargetFrameworks claim. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RuleWright.Execution\RuleWright.Execution.csproj" />
+    <ProjectReference Include="..\..\src\RuleWright.Json.SystemText\RuleWright.Json.SystemText.csproj" />
+  </ItemGroup>
+
+</Project>

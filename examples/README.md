@@ -1,17 +1,17 @@
-# Rulewright examples
+# RuleWright examples
 
 A tour of the JSON rule format, from a single rule to decision tables. Every file here is a
-valid Rulewright document — a single rule, a rule set (`rules`), or a decision table
+valid RuleWright document — a single rule, a rule set (`rules`), or a decision table
 (`decisionTable`) — and is validated against the engine in CI.
 
 ## Running an example
 
 ```csharp
-using Rulewright.Execution;
-using Rulewright.Extensions.Functions;
-using Rulewright.Json.SystemText;
+using RuleWright.Execution;
+using RuleWright.Extensions.Functions;
+using RuleWright.Json.SystemText;
 
-var engine = new RulewrightBuilder()
+var engine = new RuleWrightBuilder()
     .UseJsonReader(new SystemTextJsonReader())
     // Only 12-custom-function.json and 18-builtin-functions.json need this:
     .RegisterBuiltInFunctions()
@@ -67,7 +67,7 @@ or must exist on the type (typed facts) — see `05-null-and-coalesce.json`.
 | [15-condition-side-expression.json](15-condition-side-expression.json) | A condition whose left-hand side is a computed `expression` (e.g. `Order.Total / Order.ItemCount > 25`). |
 | [16-else-and-remove.json](16-else-and-remove.json) | First-class `else` actions (one rule, both branches) and `removeOutput` to retract an earlier rule's output. |
 | [17-disabled-rule.json](17-disabled-rule.json) | `enabled: false` retires a rule without deleting it — it is skipped entirely. |
-| [18-builtin-functions.json](18-builtin-functions.json) | `Rulewright.Extensions.Functions`' curated built-in `custom` predicates: `IsEmail`, `EqualsIgnoreCase`, `DivisibleBy`, `IsPositive`. |
+| [18-builtin-functions.json](18-builtin-functions.json) | `RuleWright.Extensions.Functions`' curated built-in `custom` predicates: `IsEmail`, `EqualsIgnoreCase`, `DivisibleBy`, `IsPositive`. |
 | [19-decision-table-computed-cell.json](19-decision-table-computed-cell.json) | A decision table `then` cell is an expression, not just a constant — a pricing table computes its output from the fact. |
 | [20-collection-operators.json](20-collection-operators.json) | Collection quantifiers: `Any` / `All` / `None` over a collection field, `"$"` for scalar elements, and `count`. |
 | [21-stop-after-first-match.json](21-stop-after-first-match.json) | `stopAfterFirstMatch` — the *set’s own* semantics: evaluation stops at the first rule that passes, with no option from the caller (compare 02). |

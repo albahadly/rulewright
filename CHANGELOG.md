@@ -1,15 +1,28 @@
 # Changelog
 
 All notable changes to this project are documented here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Rulewright uses
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and RuleWright uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0, breaking changes may land
 in a minor version; each one is called out below.
 
 ## [0.3.0]
 
 The first release since 0.1.1 — it carries everything in 0.2.0 below as well, which was never
-published. Additive relative to 0.2.0: rules can now reason about collection fields, which
-`In`/`NotIn` never could. Coming from 0.1.1, read 0.2.0's **Changed** section too.
+published. **The project is now spelled `RuleWright`**, which renames every package, assembly and
+namespace; beyond that it is additive relative to 0.2.0, in that rules can now reason about
+collection fields, which `In`/`NotIn` never could. Coming from 0.1.1, read 0.2.0's **Changed**
+section too.
+
+### Changed
+
+- **`Rulewright` is now `RuleWright` everywhere** — package ids (`RuleWright`, `RuleWright.Core`,
+  `RuleWright.Serialization`, `RuleWright.Execution`, `RuleWright.Json.SystemText`,
+  `RuleWright.Json.NewtonsoftJson`, `RuleWright.Extensions.Functions`), assembly names, and every
+  namespace. **This is a source-breaking change**: `using Rulewright.Core;` becomes
+  `using RuleWright.Core;`, and because the assembly names changed too, a consumer must recompile
+  rather than drop the new assemblies in place. Package ids are case-insensitive on nuget.org, so
+  an existing `<PackageReference Include="Rulewright.Core" />` still resolves; the code inside it
+  does not. Rule documents are untouched — no JSON written for an earlier version needs editing.
 
 ### Added
 
@@ -164,5 +177,5 @@ on the feed, take 0.3.0.
 
 Initial public packages: the core domain model, JSON parsing and schema validation, the
 expression-tree evaluation engine, System.Text.Json and Newtonsoft.Json adapters, the built-in
-`custom` predicate catalog, and the `Rulewright` metapackage. See the
+`custom` predicate catalog, and the `RuleWright` metapackage. See the
 [releases page](https://github.com/albahadly/rulewright/releases).

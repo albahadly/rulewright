@@ -7,13 +7,13 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsPackable>true</IsPackable>
     <SignAssembly>true</SignAssembly>
-    <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)..\eng\Rulewright.snk</AssemblyOriginatorKeyFile>
+    <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)..\eng\RuleWright.snk</AssemblyOriginatorKeyFile>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <DebugType>portable</DebugType>
-    <Product>Rulewright</Product>
-    <Authors>Rulewright Contributors</Authors>
-    <Copyright>Copyright (c) 2026 Rulewright Contributors</Copyright>
+    <Product>RuleWright</Product>
+    <Authors>RuleWright Contributors</Authors>
+    <Copyright>Copyright (c) 2026 RuleWright Contributors</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <NeutralLanguage>en</NeutralLanguage>
     <VersionPrefix>0.3.0</VersionPrefix>
@@ -29,7 +29,7 @@
   </PropertyGroup>
 
   <!--
-    No IsTrimmable/IsAotCompatible here, unlike DocWright. Rulewright's whole point is
+    No IsTrimmable/IsAotCompatible here, unlike DocWright. RuleWright's whole point is
     System.Linq.Expressions: rules compile to delegates via Expression.Lambda(...).Compile(),
     and the compiler additionally builds typed HashSet<T>/EqualityComparer<T> through
     MakeGenericType and Activator.CreateInstance. That is dynamic code generation by design,

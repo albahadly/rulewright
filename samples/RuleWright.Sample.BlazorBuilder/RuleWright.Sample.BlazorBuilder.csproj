@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <version>1.2.0</version>
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RuleWright.Core\RuleWright.Core.csproj" />
+    <ProjectReference Include="..\..\src\RuleWright.Serialization\RuleWright.Serialization.csproj" />
+    <ProjectReference Include="..\..\src\RuleWright.Execution\RuleWright.Execution.csproj" />
+    <ProjectReference Include="..\..\src\RuleWright.Json.SystemText\RuleWright.Json.SystemText.csproj" />
+    <ProjectReference Include="..\..\src\RuleWright.Extensions.Functions\RuleWright.Extensions.Functions.csproj" />
+  </ItemGroup>
+
+</Project>

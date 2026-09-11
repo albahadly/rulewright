@@ -7,10 +7,10 @@
   -->
   <ItemGroup>
     <!-- Shipped: JSON adapter packages. -->
-    <!-- Rulewright.Json.NewtonsoftJson ONLY. -->
+    <!-- RuleWright.Json.NewtonsoftJson ONLY. -->
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
     <!--
-      Rulewright.Json.SystemText ONLY, and only on the down-level legs — net8.0 and
+      RuleWright.Json.SystemText ONLY, and only on the down-level legs — net8.0 and
       net10.0 have System.Text.Json in-box and must not take a package reference for it.
     -->
     <PackageVersion Include="System.Text.Json" Version="10.0.10" />

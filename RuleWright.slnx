@@ -1,0 +1,49 @@
+<Solution>
+  <Folder Name="/examples/">
+    <File Path="examples/README.md" />
+    <File Path="examples/01-quickstart-single-rule.json" />
+    <File Path="examples/02-rule-set-priority.json" />
+    <File Path="examples/03-string-operators.json" />
+    <File Path="examples/04-collection-operators.json" />
+    <File Path="examples/05-null-and-coalesce.json" />
+    <File Path="examples/06-nested-logic.json" />
+    <File Path="examples/07-computed-values.json" />
+    <File Path="examples/08-arithmetic-operators.json" />
+    <File Path="examples/09-accumulators-risk-scoring.json" />
+    <File Path="examples/10-decision-table-first.json" />
+    <File Path="examples/11-decision-table-collect-scoring.json" />
+    <File Path="examples/12-custom-function.json" />
+    <File Path="examples/13-if-else-append.json" />
+    <File Path="examples/14-if-else-decision-table.json" />
+    <File Path="examples/15-condition-side-expression.json" />
+    <File Path="examples/16-else-and-remove.json" />
+    <File Path="examples/17-disabled-rule.json" />
+    <File Path="examples/18-builtin-functions.json" />
+    <File Path="examples/19-decision-table-computed-cell.json" />
+    <File Path="examples/20-collection-operators.json.json" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/RuleWright.Sample.AspNetCore/RuleWright.Sample.AspNetCore.csproj" />
+    <Project Path="samples/RuleWright.Sample.BlazorBuilder/RuleWright.Sample.BlazorBuilder.csproj" />
+    <Project Path="samples/RuleWright.Sample.ConsoleApp/RuleWright.Sample.ConsoleApp.csproj" />
+    <Project Path="samples/RuleWright.Sample.DecisionTable/RuleWright.Sample.DecisionTable.csproj" />
+    <Project Path="samples/RuleWright.Sample.Functions/RuleWright.Sample.Functions.csproj" />
+    <Project Path="samples/RuleWright.Sample.NetFramework48/RuleWright.Sample.NetFramework48.csproj" />
+    <Project Path="samples/RuleWright.Sample.NewtonsoftJson/RuleWright.Sample.NewtonsoftJson.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/RuleWright/RuleWright.csproj" />
+    <Project Path="src/RuleWright.Core/RuleWright.Core.csproj" />
+    <Project Path="src/RuleWright.Execution/RuleWright.Execution.csproj" />
+    <Project Path="src/RuleWright.Extensions.Functions/RuleWright.Extensions.Functions.csproj" />
+    <Project Path="src/RuleWright.Json.NewtonsoftJson/RuleWright.Json.NewtonsoftJson.csproj" />
+    <Project Path="src/RuleWright.Json.SystemText/RuleWright.Json.SystemText.csproj" />
+    <Project Path="src/RuleWright.Serialization/RuleWright.Serialization.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RuleWright.Benchmarks/RuleWright.Benchmarks.csproj" />
+    <Project Path="tests/RuleWright.Core.Tests/RuleWright.Core.Tests.csproj" />
+    <Project Path="tests/RuleWright.Execution.Tests/RuleWright.Execution.Tests.csproj" />
+    <Project Path="tests/RuleWright.Serialization.Tests/RuleWright.Serialization.Tests.csproj" />
+  </Folder>
+</Solution>

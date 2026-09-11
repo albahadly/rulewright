@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Rulewright is pre-1.0. Fixes land on the latest released minor version; there are no long-term
+RuleWright is pre-1.0. Fixes land on the latest released minor version; there are no long-term
 support branches yet.
 
 | Version | Supported |
@@ -22,7 +22,7 @@ within a week, and an assessment with a fix or a rejection with reasons after th
 
 ## Threat model
 
-Rulewright's central assumption is that **a rule document is code-adjacent input**. Rules decide
+RuleWright's central assumption is that **a rule document is code-adjacent input**. Rules decide
 business outcomes, so treat authorship as a privileged operation: review rule changes the way you
 review code, and do not load documents from untrusted parties without review.
 
@@ -30,7 +30,7 @@ Within that assumption, these properties are deliberate and a break in any of th
 vulnerability worth reporting:
 
 - **Rules are pure data.** The schema is a closed vocabulary — operators, field paths, and
-  literals. Rulewright never compiles, evaluates, or otherwise executes a string from a document.
+  literals. RuleWright never compiles, evaluates, or otherwise executes a string from a document.
   A rule cannot call arbitrary code; the only extension point is a `custom` function that the
   *host application* registered on the builder.
 - **Evaluation is total.** It does not throw on data. A null field, a missing key, a non-numeric
@@ -38,7 +38,7 @@ vulnerability worth reporting:
   evaluation into an exception path.
 - **Regular expressions are time-bounded.** `MatchesRegex` patterns come from the rule author but
   run against consumer data, so matching is capped (one second by default, configurable with
-  `RulewrightBuilder.UseRegexTimeout`) and raises `RegexMatchTimeoutException` rather than letting
+  `RuleWrightBuilder.UseRegexTimeout`) and raises `RegexMatchTimeoutException` rather than letting
   catastrophic backtracking pin a thread.
 - **Document nesting is bounded** by the JSON reader's depth limit (64 by default in both the
   System.Text.Json and Newtonsoft.Json adapters), so a deeply nested document cannot exhaust the
@@ -58,7 +58,7 @@ rules:
   documents grows with them. Rebuild the engine periodically if rules are hot-reloaded at scale.
 - **Compilation cost scales with document size.** A very large rule set costs time and memory on
   first evaluation per fact type. Bound the size of documents you accept.
-- **A `custom` function is host code.** Rulewright calls whatever you registered; its safety,
+- **A `custom` function is host code.** RuleWright calls whatever you registered; its safety,
   thread-safety, and running time are yours.
 - **Field paths read your fact object.** A rule can read any public property or field reachable
   from the fact you pass, including ones you did not intend to expose. Pass a purpose-built

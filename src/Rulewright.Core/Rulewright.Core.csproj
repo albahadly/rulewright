@@ -1,7 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-
-  <PropertyGroup>
-    <Description>Rulewright core domain model: rules, condition trees, actions, and evaluation results. Zero dependencies.</Description>
-  </PropertyGroup>
-
-</Project>

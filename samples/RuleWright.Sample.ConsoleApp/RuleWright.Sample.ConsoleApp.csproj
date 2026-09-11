@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RuleWright.Execution\RuleWright.Execution.csproj" />
+    <ProjectReference Include="..\..\src\RuleWright.Json.SystemText\RuleWright.Json.SystemText.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="rules\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

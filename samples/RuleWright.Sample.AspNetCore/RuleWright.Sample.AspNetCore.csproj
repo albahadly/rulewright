@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RuleWright.Execution\RuleWright.Execution.csproj" />
+    <ProjectReference Include="..\..\src\RuleWright.Json.SystemText\RuleWright.Json.SystemText.csproj" />
+    <ProjectReference Include="..\..\src\RuleWright.Serialization\RuleWright.Serialization.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="rules\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

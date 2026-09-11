@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="NRules" />
+    <PackageReference Include="RulesEngine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RuleWright.Execution\RuleWright.Execution.csproj" />
+    <ProjectReference Include="..\..\src\RuleWright.Json.SystemText\RuleWright.Json.SystemText.csproj" />
+  </ItemGroup>
+
+</Project>

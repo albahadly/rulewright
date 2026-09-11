@@ -1,6 +1,6 @@
 name: Publish to NuGet
 
-# Publishes the Rulewright.* packages to nuget.org.
+# Publishes the RuleWright.* packages to nuget.org.
 #
 # PUBLISHING IS DELIBERATE, NOT AUTOMATIC. Pushing to nuget.org cannot be undone —
 # a version can be unlisted but never removed — so the trigger is an explicit act:
@@ -39,7 +39,7 @@ permissions:
 
 jobs:
   publish:
-    name: Pack and push Rulewright.* to nuget.org
+    name: Pack and push RuleWright.* to nuget.org
     runs-on: ubuntu-latest
     # A manual run has to say so in as many words. A tag push is already deliberate.
     if: >
@@ -57,13 +57,13 @@ jobs:
       # A tag can be pushed to any commit, including one that never saw CI, so the
       # gate is re-run here rather than assumed.
       - name: Build (all TFMs)
-        run: dotnet build Rulewright.slnx -c Release
+        run: dotnet build RuleWright.slnx -c Release
 
       - name: Test (net8.0)
-        run: dotnet test Rulewright.slnx -c Release --no-build -f net8.0
+        run: dotnet test RuleWright.slnx -c Release --no-build -f net8.0
 
       - name: Test (net10.0)
-        run: dotnet test Rulewright.slnx -c Release --no-build -f net10.0
+        run: dotnet test RuleWright.slnx -c Release --no-build -f net10.0
 
       - name: Compute version (auto-increment, or honor a manual VersionPrefix bump)
         id: ver
@@ -105,7 +105,7 @@ jobs:
           IFS=. read -r vmaj vmin vpatch <<< "$prefix"
           manual_ordinal=$((10#$vmaj * 10000 + 10#$vmin * 100 + 10#$vpatch))
 
-          # Newest published version of the metapackage (all Rulewright.* packages
+          # Newest published version of the metapackage (all RuleWright.* packages
           # are versioned together), as an ordinal; -1 if none yet.
           latest_ordinal=-1
           versions=$(curl -fsSL "https://api.nuget.org/v3-flatcontainer/rulewright/index.json" \
@@ -151,7 +151,7 @@ jobs:
       # packages after it in the glob never ship — leaving a metapackage live whose
       # dependencies do not exist. Splitting the passes means the code set is always
       # complete and self-consistent before symbols are attempted.
-      - name: Push Rulewright.* to nuget.org
+      - name: Push RuleWright.* to nuget.org
         run: >
           dotnet nuget push "artifacts/nuget/*.nupkg"
           --api-key ${{ steps.nuget_login.outputs.NUGET_API_KEY }}

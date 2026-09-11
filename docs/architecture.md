@@ -1,19 +1,19 @@
-# Rulewright Architecture
+# RuleWright Architecture
 
 ## Layering
 
 ```
-Rulewright.Json.SystemText   ──┐
-Rulewright.Json.NewtonsoftJson ┤ (adapters: JSON text → neutral DOM)
+RuleWright.Json.SystemText   ──┐
+RuleWright.Json.NewtonsoftJson ┤ (adapters: JSON text → neutral DOM)
                              ▼
-                 Rulewright.Serialization      Rulewright.Core
+                 RuleWright.Serialization      RuleWright.Core
                  (DOM, parser, validator,  ──► (domain model, results,
                   canonical hash)               IRuleFunction)
                              ▲
                              │
-                 Rulewright.Execution
+                 RuleWright.Execution
                  (compiler, interpreter, cache,
-                  RulewrightBuilder / RulewrightEngine)
+                  RuleWrightBuilder / RuleWrightEngine)
 ```
 
 - **Core** is pure domain model — no I/O, no JSON, zero dependencies, immutable after
@@ -80,7 +80,7 @@ Rulewright.Json.NewtonsoftJson ┤ (adapters: JSON text → neutral DOM)
   rule and fact answer differently per machine), equality via `==`/`EqualityComparer<string>`,
   and `In`/`NotIn` via an ordinal `HashSet<string>`. `MatchesRegex` embeds a
   `RegexOptions.Compiled` regex constructed at rule-compile time, with a bounded match
-  timeout (`RulewrightBuilder.UseRegexTimeout`, one second by default) so a pattern with
+  timeout (`RuleWrightBuilder.UseRegexTimeout`, one second by default) so a pattern with
   catastrophic backtracking raises `RegexMatchTimeoutException` instead of pinning the
   thread on consumer-supplied data.
 - **`In`/`NotIn`** build a typed `HashSet<T>` once at compile time and emit a
@@ -207,7 +207,7 @@ validator use** — `OperatorMap`, `ExpressionOperatorMap`, `RequiredArity`, and
 — iterating the enums so a newly added operator appears automatically and cannot drift from what
 the engine accepts. The classification (value kinds, categories) is a coarser authoring hint;
 `RuleSetValidator` remains the authority on what actually validates. The one per-engine variable
-— the registered `custom` functions — is exposed separately as `RulewrightEngine.RegisteredFunctions`,
+— the registered `custom` functions — is exposed separately as `RuleWrightEngine.RegisteredFunctions`,
 since it is instance state rather than fixed vocabulary.
 
 ## Null semantics
@@ -262,7 +262,7 @@ in the benchmark suite rather than hidden.
 
 ## Thread safety
 
-- `RulewrightEngine` is immutable after `Build()`; the delegate cache is a
+- `RuleWrightEngine` is immutable after `Build()`; the delegate cache is a
   `ConcurrentDictionary`.
 - `LoadedRuleSet`, `RuleSet`, and every result type are immutable.
 - Compiled delegates and interpreter state are stateless per call; per-evaluation
@@ -277,7 +277,7 @@ Libraries target `net48;netstandard2.0;net8.0;net10.0`, set once in
 surface; C# language features used are syntax-only (no `IsExternalInit`, no
 `System.Index`), which is why no compiler shims are needed for the down-level legs.
 The net48 leg is enforced three ways: the test projects run on net48, the
-`Rulewright.Sample.NetFramework48` smoke test runs in CI, and the System.Text.Json
+`RuleWright.Sample.NetFramework48` smoke test runs in CI, and the System.Text.Json
 adapter takes the package reference only on `net48`/`netstandard2.0` (net8.0 and
 net10.0 use the in-box copy).
 

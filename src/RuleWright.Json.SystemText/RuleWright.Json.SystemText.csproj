@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>System.Text.Json adapter for RuleWright: implements IRuleJsonReader and JsonElement fact helpers.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RuleWright.Serialization\RuleWright.Serialization.csproj" />
+  </ItemGroup>
+
+  <!-- System.Text.Json is in-box from net8.0 on; only the down-level legs need the package. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0' or '$(TargetFramework)' == 'net48'">
+    <PackageReference Include="System.Text.Json" />
+  </ItemGroup>
+
+</Project>

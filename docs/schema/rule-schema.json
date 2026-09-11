@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rulewright.dev/schema/rule-schema.json",
-  "title": "Rulewright rule document",
-  "description": "A Rulewright rule document: either a single rule or a rule set. Logic lives in 'condition' and 'actions'; the 'layout' key is presentation metadata for canvas tools and is ignored entirely by the engine.",
+  "title": "RuleWright rule document",
+  "description": "A RuleWright rule document: either a single rule or a rule set. Logic lives in 'condition' and 'actions'; the 'layout' key is presentation metadata for canvas tools and is ignored entirely by the engine.",
   "oneOf": [
     {
       "$ref": "#/$defs/rule"

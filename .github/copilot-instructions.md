@@ -1,6 +1,6 @@
-# Copilot instructions for Rulewright
+# Copilot instructions for RuleWright
 
-Rulewright is a **JSON-driven business rule engine for .NET**. The workflow is always:
+RuleWright is a **JSON-driven business rule engine for .NET**. The workflow is always:
 **parse** a rule document → **validate** it against `docs/schema/rule-schema.json` →
 **compile** it to expression-tree delegates (or **interpret** it for dictionary facts) →
 **evaluate** facts against it, producing fired rules + merged outputs + an optional trace.
@@ -17,33 +17,33 @@ the authoritative contract and spell out the subtle rules (null handling, hashin
 
 ## Repo layout
 
-- **`src/Rulewright.Core`** — domain model, **zero dependencies**, netstandard2.0-only syntax
+- **`src/RuleWright.Core`** — domain model, **zero dependencies**, netstandard2.0-only syntax
   (no `record`, no `init`, no `System.Index`/`Range`, no target-typed `new` that needs newer langver
   behavior). Key types: `Rule`, `RuleSet`, `ConditionNode` (`ConditionLeaf` / `ConditionGroup`),
   `ValueExpression` (`LiteralExpression` / `FieldExpression` / `OperatorExpression`), `RuleAction`,
   `IRuleFunction`, and the result/trace types (`RuleEvaluationResult`, `FiredRule`,
   `EvaluationTrace`, `RuleTrace`, `ConditionTraceNode`). Enums: `ConditionOperator`,
   `LogicalOperator`, `ExpressionOperator`, `RuleBranch`, `CompilationMode`.
-- **`src/Rulewright.Serialization`** — the JSON-neutral DOM `RuleJsonValue` (+ `IRuleJsonReader`),
+- **`src/RuleWright.Serialization`** — the JSON-neutral DOM `RuleJsonValue` (+ `IRuleJsonReader`),
   `RuleSetParser` (DOM ↔ domain, incl. decision-table expansion), `RuleSetValidator` (structural
   validation with JSON-pointer error paths), `RuleHasher` (content hash), and `RuleSchemaCatalog`
   (the vocabulary as structured metadata for UIs/tooling). **No JSON-library dependency.**
-- **`src/Rulewright.Execution`** — `RulewrightBuilder` → `RulewrightEngine`. Compiles each rule to
+- **`src/RuleWright.Execution`** — `RuleWrightBuilder` → `RuleWrightEngine`. Compiles each rule to
   expression-tree delegates **per fact type**, cached by the rule's **content hash**; falls back to
   an interpreter for dictionary facts. Tracing is a **separate compiled delegate** (opt-in, zero
   cost when off). Key files: `RuleExpressionCompiler`, `RuleInterpreter`, `RuntimeComparisons`,
   `ValueExpressionOps`, `OutputApplier`, `ConditionTraceBuilder`, `CompiledRule`, `LoadedRuleSet`.
-- **`src/Rulewright.Json.SystemText`** — `SystemTextJsonReader : IRuleJsonReader` +
+- **`src/RuleWright.Json.SystemText`** — `SystemTextJsonReader : IRuleJsonReader` +
   `SystemTextJsonFacts.ToDictionary(JsonElement)`.
-- **`src/Rulewright.Json.NewtonsoftJson`** — `NewtonsoftJsonReader : IRuleJsonReader` +
+- **`src/RuleWright.Json.NewtonsoftJson`** — `NewtonsoftJsonReader : IRuleJsonReader` +
   `NewtonsoftJsonFacts.ToDictionary(JToken)`. Parity-tested against the STJ adapter.
-- **`src/Rulewright.Extensions.Functions`** — built-in `custom`-operator predicates
-  (`BuiltInFunctions`), `NamedRuleFunction`, and `RulewrightBuilder` extension methods
+- **`src/RuleWright.Extensions.Functions`** — built-in `custom`-operator predicates
+  (`BuiltInFunctions`), `NamedRuleFunction`, and `RuleWrightBuilder` extension methods
   (`RegisterBuiltInFunctions`, `RegisterFunctions`, `RegisterFunctionsFrom`).
 - **`tests/`** — one xUnit **v3** project per `src/` library (run on both TFMs), plus
-  `Rulewright.Benchmarks` (BenchmarkDotNet, with an NRules / MS-RulesEngine comparison).
+  `RuleWright.Benchmarks` (BenchmarkDotNet, with an NRules / MS-RulesEngine comparison).
 - **`examples/`** — 19 canonical rule-schema JSON documents (`NN-name.json`), each with a
-  golden-file fixture under `tests/Rulewright.Execution.Tests/Fixtures/example-NN.json`. These are
+  golden-file fixture under `tests/RuleWright.Execution.Tests/Fixtures/example-NN.json`. These are
   also the demo content the Blazor samples load.
 - **`samples/`** — `ConsoleApp`, `AspNetCore`, `NewtonsoftJson`, `Functions`, `DecisionTable`,
   `NetFramework48`, and two Blazor WASM **visual rule builders** (see the Blazor section below).
@@ -54,7 +54,7 @@ the authoritative contract and spell out the subtle rules (null handling, hashin
 
 ## Hard invariants — do not violate (from CONTRIBUTING.md)
 
-1. **`Rulewright.Core` stays zero-dependency**, and every `src/` library keeps compiling for
+1. **`RuleWright.Core` stays zero-dependency**, and every `src/` library keeps compiling for
    `netstandard2.0`. Don't add a runtime dependency to Core; don't use APIs/syntax unavailable on
    netstandard2.0.
 2. **The JSON schema is a contract.** Any change to `docs/schema/rule-schema.json`, `RuleSetValidator`,
@@ -152,7 +152,7 @@ special-casing.
 
 ```csharp
 // Build an engine (immutable, thread-safe, reusable across evaluations)
-RulewrightEngine engine = new RulewrightBuilder()
+RuleWrightEngine engine = new RuleWrightBuilder()
     .UseJsonReader(new SystemTextJsonReader())               // or NewtonsoftJsonReader
     .RegisterFunction("IsBusinessDay", (fieldValue, value) => /* bool */ true)  // inline custom fn
     .RegisterFunction(new MyRuleFunction())                  // IRuleFunction instance
@@ -187,7 +187,7 @@ Custom functions: implement `IRuleFunction` (`string Name`; `bool Evaluate(objec
 — **must be thread-safe** (one shared instance). Make functions **total** (bad type → `false`, never
 throw). For inline functions use `new NamedRuleFunction("Name", (field, value) => …)`.
 
-**Validation / discovery / serialization** (in `Rulewright.Serialization`):
+**Validation / discovery / serialization** (in `RuleWright.Serialization`):
 ```csharp
 RuleJsonValue doc = jsonReader.Read(json);
 RuleSetValidationResult vr = RuleSetValidator.Validate(doc);   // vr.IsValid, vr.Errors[i].Path (JSON-pointer) + .Message
@@ -210,10 +210,10 @@ applies these semantics rather than throwing). Preserve this exactly when changi
 ## Build & test
 
 ```
-dotnet build Rulewright.slnx
-dotnet test  Rulewright.slnx              # net8.0 + net10.0 + net48 (Windows)
-dotnet test  Rulewright.slnx -f net8.0    # one leg at a time (Linux/macOS — no net48 runtime)
-dotnet test  Rulewright.slnx -f net10.0
+dotnet build RuleWright.slnx
+dotnet test  RuleWright.slnx              # net8.0 + net10.0 + net48 (Windows)
+dotnet test  RuleWright.slnx -f net8.0    # one leg at a time (Linux/macOS — no net48 runtime)
+dotnet test  RuleWright.slnx -f net10.0
 ```
 
 All of these must be **clean: 0 warnings, 0 failures** before a change is done (warnings are errors). The
@@ -225,7 +225,7 @@ gotchas before inventing a verification flow.
 
 ---
 
-## Blazor rule builder (`samples/Rulewright.Sample.BlazorBuilder`)
+## Blazor rule builder (`samples/RuleWright.Sample.BlazorBuilder`)
 
 One WASM sample that authors **this exact rule schema**, fully client-side (it references
 Core/Serialization/Execution/Json.SystemText/Extensions.Functions and runs the real engine in the
@@ -266,6 +266,6 @@ browser-verified. It is deployed to GitHub Pages by
   of that contract in the same change.
 - **Don't** suppress `TreatWarningsAsErrors` or add `#pragma warning disable` to dodge a missing XML
   doc — write the doc.
-- **Don't** add a runtime dependency to `Rulewright.Core`, or use non-netstandard2.0 syntax in any
+- **Don't** add a runtime dependency to `RuleWright.Core`, or use non-netstandard2.0 syntax in any
   `src/` library.
 - **Don't** give `layout` evaluation meaning or fold rule metadata into `RuleHasher`.

@@ -1,4 +1,4 @@
-# Contributing to Rulewright
+# Contributing to RuleWright
 
 Thanks for your interest! Issues, discussions, and pull requests are all welcome.
 
@@ -10,26 +10,26 @@ Thanks for your interest! Issues, discussions, and pull requests are all welcome
 - Build & test:
 
   ```
-  dotnet build Rulewright.slnx
-  dotnet test  Rulewright.slnx              # net8.0 + net10.0 + net48 on Windows
-  dotnet test  Rulewright.slnx -f net8.0    # Linux/macOS: run each leg — no net48 runtime there
-  dotnet test  Rulewright.slnx -f net10.0
+  dotnet build RuleWright.slnx
+  dotnet test  RuleWright.slnx              # net8.0 + net10.0 + net48 on Windows
+  dotnet test  RuleWright.slnx -f net8.0    # Linux/macOS: run each leg — no net48 runtime there
+  dotnet test  RuleWright.slnx -f net10.0
   ```
 
 - Benchmarks (Release only):
 
   ```
-  dotnet run -c Release --project tests/Rulewright.Benchmarks -- --filter '*Evaluation*'
+  dotnet run -c Release --project tests/RuleWright.Benchmarks -- --filter '*Evaluation*'
   ```
 
 ## Ground rules
 
-- **`Rulewright.Core` stays zero-dependency** and every library keeps compiling for
+- **`RuleWright.Core` stays zero-dependency** and every library keeps compiling for
   `netstandard2.0`. Use only syntax-level C# features there (no `init`, no records,
   no `System.Index/Range`).
 - **The JSON schema is a contract.** Changes to `docs/schema/rule-schema.json`, the
   validator, or observable evaluation semantics must update the golden-file fixtures
-  (`tests/Rulewright.Execution.Tests/Fixtures`) deliberately — a fixture change is a
+  (`tests/RuleWright.Execution.Tests/Fixtures`) deliberately — a fixture change is a
   reviewable, intentional contract change.
 - **Compiled and interpreted paths stay in parity.** If you change operator
   semantics, change both `RuleExpressionCompiler` and `RuleInterpreter`/

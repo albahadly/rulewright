@@ -1,4 +1,4 @@
-# Using Rulewright
+# Using RuleWright
 
 A task-oriented tour: every snippet below is a complete, runnable example. If you want the
 conceptual reference instead — the full operator table, the schema contract, the architecture —
@@ -25,7 +25,7 @@ see [README.md](README.md) and [docs/architecture.md](docs/architecture.md).
 ## Install
 
 ```
-dotnet add package Rulewright
+dotnet add package RuleWright
 ```
 
 One metapackage: domain model, JSON parsing and validation, the engine, the System.Text.Json
@@ -33,10 +33,10 @@ adapter, and the built-in `custom` predicates. To pick pieces, see the package t
 [README.md](README.md#install).
 
 ```csharp
-using Rulewright.Core;          // Rule, RuleSet, EvaluationOptions, RuleEvaluationResult
-using Rulewright.Execution;     // RulewrightBuilder, RulewrightEngine, LoadedRuleSet
-using Rulewright.Json.SystemText;
-using Rulewright.Extensions.Functions;
+using RuleWright.Core;          // Rule, RuleSet, EvaluationOptions, RuleEvaluationResult
+using RuleWright.Execution;     // RuleWrightBuilder, RuleWrightEngine, LoadedRuleSet
+using RuleWright.Json.SystemText;
+using RuleWright.Extensions.Functions;
 ```
 
 ## 1. Your first rule
@@ -64,7 +64,7 @@ A rule is JSON: a condition, and the actions to apply when it passes.
 Three steps to run it — build an engine, load the document, evaluate a fact:
 
 ```csharp
-var engine = new RulewrightBuilder()
+var engine = new RuleWrightBuilder()
     .UseJsonReader(new SystemTextJsonReader())
     .Build();
 
@@ -447,7 +447,7 @@ When the closed operator set doesn't cover something, register a predicate and c
 `custom` operator. The delegate receives the resolved field value and the leaf's `value`:
 
 ```csharp
-var engine = new RulewrightBuilder()
+var engine = new RuleWrightBuilder()
     .UseJsonReader(new SystemTextJsonReader())
     .RegisterFunction("IsBusinessDay", (field, value) =>
         field is DateTime d && d.DayOfWeek != DayOfWeek.Saturday && d.DayOfWeek != DayOfWeek.Sunday)
@@ -461,10 +461,10 @@ var engine = new RulewrightBuilder()
 Omit `field` and the function receives the whole fact. Functions are bound at **compile time**, so
 an unregistered name fails at `LoadRuleSet` — not mid-evaluation. They must be thread-safe.
 
-`Rulewright.Extensions.Functions` ships a curated catalog:
+`RuleWright.Extensions.Functions` ships a curated catalog:
 
 ```csharp
-var engine = new RulewrightBuilder()
+var engine = new RuleWrightBuilder()
     .UseJsonReader(new SystemTextJsonReader())
     .RegisterBuiltInFunctions()                        // IsEmail, IsEven, EqualsIgnoreCase, …
     .RegisterFunctionsFrom(typeof(Program).Assembly)   // scan your own IRuleFunction types
@@ -597,18 +597,18 @@ says `"Equals"` / `"NotEquals"`, to avoid colliding with `object.Equals`.
 The engine is thread-safe, and both it and a `LoadedRuleSet` are meant to outlive a request:
 
 ```csharp
-builder.Services.AddSingleton(new RulewrightBuilder()
+builder.Services.AddSingleton(new RuleWrightBuilder()
     .UseJsonReader(new SystemTextJsonReader())
     .RegisterBuiltInFunctions()
     .Build());
 
 builder.Services.AddSingleton(provider =>
 {
-    RulewrightEngine engine = provider.GetRequiredService<RulewrightEngine>();
+    RuleWrightEngine engine = provider.GetRequiredService<RuleWrightEngine>();
     return engine.LoadRuleSet(File.ReadAllText("rules/checkout.json"));
 });
 
-app.MapPost("/evaluate", (EvaluateRequest request, RulewrightEngine engine, LoadedRuleSet rules) =>
+app.MapPost("/evaluate", (EvaluateRequest request, RuleWrightEngine engine, LoadedRuleSet rules) =>
 {
     Dictionary<string, object?> fact = SystemTextJsonFacts.ToDictionary(request.Fact);
     RuleEvaluationResult result = engine.Evaluate(rules, fact);
@@ -628,8 +628,8 @@ the engine periodically if that's your shape.
 **Newtonsoft.Json instead:**
 
 ```csharp
-var engine = new RulewrightBuilder()
-    .UseJsonReader(new NewtonsoftJsonReader())    // Rulewright.Json.NewtonsoftJson
+var engine = new RuleWrightBuilder()
+    .UseJsonReader(new NewtonsoftJsonReader())    // RuleWright.Json.NewtonsoftJson
     .Build();
 ```
 
@@ -653,7 +653,7 @@ engine.FunctionCatalog;                  // custom functions: name, description,
 ```
 
 The catalog is derived from the same maps the parser and validator use, so it cannot drift from
-what the engine actually accepts. `samples/Rulewright.Sample.BlazorBuilder` is a full
+what the engine actually accepts. `samples/RuleWright.Sample.BlazorBuilder` is a full
 WebAssembly editor built on exactly this.
 
 ## 14. Errors you may hit

@@ -1,4 +1,4 @@
-# Rulewright
+# RuleWright
 
 A high-performance, JSON-driven business rule engine for .NET. Rules are plain JSON
 documents; evaluation is compiled expression trees — parse once, compile once, execute
@@ -35,7 +35,7 @@ millions of times.
 ```
 
 ```csharp
-var engine = new RulewrightBuilder()
+var engine = new RuleWrightBuilder()
     .UseJsonReader(new SystemTextJsonReader())
     .RegisterFunction("IsBusinessDay", (fieldValue, value) => /* ... */ true)
     .Build();
@@ -52,7 +52,7 @@ foreach (FiredRule fired in result.FiredRules)
     Console.WriteLine($"{fired.RuleId} -> {string.Join(", ", fired.Outputs)}");
 ```
 
-## Why Rulewright?
+## Why RuleWright?
 
 - **Compiled, not interpreted.** Rules compile to delegates via expression trees:
   parse once, compile once per fact type, then evaluations are direct delegate calls —
@@ -79,7 +79,7 @@ foreach (FiredRule fired in result.FiredRules)
 
 ### Why not NRules or Microsoft RulesEngine?
 
-| | Rulewright | NRules | MS RulesEngine |
+| | RuleWright | NRules | MS RulesEngine |
 |---|---|---|---|
 | Rule format | JSON documents | C# fluent DSL | JSON with lambda-expression strings |
 | Evaluation | Compiled expression trees | Rete network | Parsed/compiled C# expression strings |
@@ -90,38 +90,38 @@ foreach (FiredRule fired in result.FiredRules)
 
 NRules is the right tool for forward-chaining inference over a working memory.
 Microsoft RulesEngine embeds C# expression *strings* in JSON, which means arbitrary
-code in rule files and runtime string compilation. Rulewright's rules are pure data:
+code in rule files and runtime string compilation. RuleWright's rules are pure data:
 a closed, validatable operator vocabulary that a UI can safely generate and a
 reviewer can safely diff. For the stateless "evaluate this fact against these rules"
-case, Rulewright is also measurably faster and leaner than both — see
+case, RuleWright is also measurably faster and leaner than both — see
 [`docs/benchmarks.md`](docs/benchmarks.md) for a like-for-like harness (with a
 fairness check that all three flag the same matches).
 
 ## Install
 
 ```
-dotnet add package Rulewright
+dotnet add package RuleWright
 ```
 
 That is the metapackage: the domain model, JSON parsing and schema validation, the
 evaluation engine, the System.Text.Json adapter, and the built-in `custom` functions.
 
-Prefer to pick pieces? Reference `Rulewright.Execution` plus one JSON adapter:
+Prefer to pick pieces? Reference `RuleWright.Execution` plus one JSON adapter:
 
 ```
-dotnet add package Rulewright.Execution
-dotnet add package Rulewright.Json.NewtonsoftJson    # or Rulewright.Json.SystemText
+dotnet add package RuleWright.Execution
+dotnet add package RuleWright.Json.NewtonsoftJson    # or RuleWright.Json.SystemText
 ```
 
 | Package | What it is |
 |---|---|
-| `Rulewright` | Everything below except the Newtonsoft adapter. Start here. |
-| `Rulewright.Execution` | The compiler, interpreter, delegate cache, and engine API. |
-| `Rulewright.Serialization` | Parsing, validation, and canonical hashing — no evaluation, no JSON library. |
-| `Rulewright.Core` | The domain model alone. Zero dependencies. |
-| `Rulewright.Json.SystemText` | `IRuleJsonReader` over System.Text.Json, plus JSON fact helpers. |
-| `Rulewright.Json.NewtonsoftJson` | The same, over Newtonsoft.Json. |
-| `Rulewright.Extensions.Functions` | The built-in `custom`-operator predicate catalog. |
+| `RuleWright` | Everything below except the Newtonsoft adapter. Start here. |
+| `RuleWright.Execution` | The compiler, interpreter, delegate cache, and engine API. |
+| `RuleWright.Serialization` | Parsing, validation, and canonical hashing — no evaluation, no JSON library. |
+| `RuleWright.Core` | The domain model alone. Zero dependencies. |
+| `RuleWright.Json.SystemText` | `IRuleJsonReader` over System.Text.Json, plus JSON fact helpers. |
+| `RuleWright.Json.NewtonsoftJson` | The same, over Newtonsoft.Json. |
+| `RuleWright.Extensions.Functions` | The built-in `custom`-operator predicate catalog. |
 
 All packages target .NET Framework 4.8, .NET Standard 2.0, .NET 8.0 and .NET 10.0, are
 strong-named, and ship symbols (`.snupkg`) with Source Link.
@@ -164,11 +164,11 @@ computed left-hand side. See
 [usage.md](usage.md#5a-collections-any-all-none-count) and
 [examples/20-collection-operators.json](examples/20-collection-operators.json).
 
-For the `custom` operator, `Rulewright.Extensions.Functions` ships a curated catalog of
+For the `custom` operator, `RuleWright.Extensions.Functions` ships a curated catalog of
 ready-made predicates and helpers to register them:
 
 ```csharp
-var engine = new RulewrightBuilder()
+var engine = new RuleWrightBuilder()
     .UseJsonReader(new SystemTextJsonReader())
     .RegisterBuiltInFunctions()                       // IsEven, EqualsIgnoreCase, IsWeekend, …
     .RegisterFunctionsFrom(typeof(Program).Assembly)  // scan your own IRuleFunction classes
@@ -372,13 +372,13 @@ never drift from what the engine actually accepts.
 
 | Project | Shows |
 |---|---|
-| [`Rulewright.Sample.ConsoleApp`](samples/Rulewright.Sample.ConsoleApp) | The quickstart: load a rule set, evaluate a typed fact (compiled path) and a dictionary fact (interpreted path), print a trace. |
-| [`Rulewright.Sample.AspNetCore`](samples/Rulewright.Sample.AspNetCore) | The engine and a loaded rule set as ASP.NET Core singletons behind a minimal API: `POST /evaluate` a fact, `GET /rules`, `GET /vocabulary` (the schema discovery catalog over HTTP). |
-| [`Rulewright.Sample.NewtonsoftJson`](samples/Rulewright.Sample.NewtonsoftJson) | The same quickstart with `NewtonsoftJsonReader` in place of `SystemTextJsonReader` — swapping the JSON adapter is the only change. |
-| [`Rulewright.Sample.Functions`](samples/Rulewright.Sample.Functions) | The three ways to register `custom`-operator functions together: `RegisterBuiltInFunctions`, an inline `RegisterFunction` delegate, and `RegisterFunctionsFrom` assembly discovery. |
-| [`Rulewright.Sample.DecisionTable`](samples/Rulewright.Sample.DecisionTable) | Loading `decisionTable` documents end to end, contrasting `hitPolicy: "first"` (one row wins) against `"collect"` (every matching row's actions apply). |
-| [`Rulewright.Sample.NetFramework48`](samples/Rulewright.Sample.NetFramework48) | A .NET Framework 4.8 smoke test proving the netstandard2.0 packages work end to end outside .NET (Core). |
-| [`Rulewright.Sample.BlazorBuilder`](samples/Rulewright.Sample.BlazorBuilder) | The v3 rule builder: a Blazor WebAssembly app with a freeform, drag-and-drop dark-themed node canvas (palette → drag nodes onto a canvas → wire them together) in the style of n8n/Logic Apps/Node-RED. Covers the full authoring surface — all condition operators, computed value-expressions, all four action types, else branches, custom functions, and multi-rule sets — and can load any of the `examples/` rule files onto the canvas. Backed by the real engine for Validate/Test, in-browser: no server, no round trip, no simulation. |
+| [`RuleWright.Sample.ConsoleApp`](samples/RuleWright.Sample.ConsoleApp) | The quickstart: load a rule set, evaluate a typed fact (compiled path) and a dictionary fact (interpreted path), print a trace. |
+| [`RuleWright.Sample.AspNetCore`](samples/RuleWright.Sample.AspNetCore) | The engine and a loaded rule set as ASP.NET Core singletons behind a minimal API: `POST /evaluate` a fact, `GET /rules`, `GET /vocabulary` (the schema discovery catalog over HTTP). |
+| [`RuleWright.Sample.NewtonsoftJson`](samples/RuleWright.Sample.NewtonsoftJson) | The same quickstart with `NewtonsoftJsonReader` in place of `SystemTextJsonReader` — swapping the JSON adapter is the only change. |
+| [`RuleWright.Sample.Functions`](samples/RuleWright.Sample.Functions) | The three ways to register `custom`-operator functions together: `RegisterBuiltInFunctions`, an inline `RegisterFunction` delegate, and `RegisterFunctionsFrom` assembly discovery. |
+| [`RuleWright.Sample.DecisionTable`](samples/RuleWright.Sample.DecisionTable) | Loading `decisionTable` documents end to end, contrasting `hitPolicy: "first"` (one row wins) against `"collect"` (every matching row's actions apply). |
+| [`RuleWright.Sample.NetFramework48`](samples/RuleWright.Sample.NetFramework48) | A .NET Framework 4.8 smoke test proving the netstandard2.0 packages work end to end outside .NET (Core). |
+| [`RuleWright.Sample.BlazorBuilder`](samples/RuleWright.Sample.BlazorBuilder) | The v3 rule builder: a Blazor WebAssembly app with a freeform, drag-and-drop dark-themed node canvas (palette → drag nodes onto a canvas → wire them together) in the style of n8n/Logic Apps/Node-RED. Covers the full authoring surface — all condition operators, computed value-expressions, all four action types, else branches, custom functions, and multi-rule sets — and can load any of the `examples/` rule files onto the canvas. Backed by the real engine for Validate/Test, in-browser: no server, no round trip, no simulation. |
 
 Build rule JSON files in the hosted editor: https://albahadly.github.io/rulewright
 
@@ -388,19 +388,19 @@ needs `dotnet run` — it listens on the URL printed at startup; try `curl -X PO
 
 ## Performance
 
-The benchmark suite (`tests/Rulewright.Benchmarks`, BenchmarkDotNet) measures
+The benchmark suite (`tests/RuleWright.Benchmarks`, BenchmarkDotNet) measures
 compiled vs interpreted throughput at 1 / 100 / 10,000 rules, cold-load vs
 warm-cache cost, and a like-for-like comparison against NRules and Microsoft
 RulesEngine. Run it with:
 
 ```
-dotnet run -c Release --project tests/Rulewright.Benchmarks -- --filter '*'
+dotnet run -c Release --project tests/RuleWright.Benchmarks -- --filter '*'
 ```
 
 A warm compiled evaluation of a small rule set is on the order of **~100 ns/rule**
 with minimal allocation; the dictionary interpreter is ~1.8× slower by design, and
 tracing (a separate compiled delegate) costs ~3× **only when enabled**. Against the
-same rule set and fact, Rulewright evaluates the stateless one-shot case faster and
+same rule set and fact, RuleWright evaluates the stateless one-shot case faster and
 far leaner than both NRules and Microsoft RulesEngine — full tables, methodology, and
 a fairness check are in [`docs/benchmarks.md`](docs/benchmarks.md). *(Numbers are
 illustrative and machine-specific; re-run the suite on your hardware.)*
@@ -409,25 +409,25 @@ illustrative and machine-specific; re-run the suite on your hardware.)*
 
 ```
 git clone https://github.com/albahadly/rulewright.git
-cd Rulewright
-dotnet build Rulewright.slnx
-dotnet test  Rulewright.slnx            # runs on net8.0, net10.0 and net48 (Windows)
-dotnet run --project samples/Rulewright.Sample.ConsoleApp
+cd RuleWright
+dotnet build RuleWright.slnx
+dotnet test  RuleWright.slnx            # runs on net8.0, net10.0 and net48 (Windows)
+dotnet run --project samples/RuleWright.Sample.ConsoleApp
 ```
 
 Requires the .NET 10 SDK (`global.json` pins `10.0.100`). On Windows, the test suite and the
-`Rulewright.Sample.NetFramework48` smoke test also exercise .NET Framework 4.8.
+`RuleWright.Sample.NetFramework48` smoke test also exercise .NET Framework 4.8.
 
 ## Packages
 
 | Package | Contents |
 |---|---|
-| `Rulewright.Core` | Domain model: `Rule`, conditions, results, `IRuleFunction`. Zero dependencies. |
-| `Rulewright.Serialization` | JSON ↔ domain mapping, structural validator (JSON-pointer errors), content hashing. |
-| `Rulewright.Execution` | Expression-tree compiler, interpreter fallback, delegate cache, `RulewrightBuilder` / `RulewrightEngine`. |
-| `Rulewright.Json.SystemText` | `IRuleJsonReader` adapter for System.Text.Json + `JsonElement` fact helpers. |
-| `Rulewright.Json.NewtonsoftJson` | `IRuleJsonReader` adapter for Newtonsoft.Json + `JToken` fact helpers. |
-| `Rulewright.Extensions.Functions` | Built-in `custom`-operator predicates + registration/assembly-scan discovery helpers. |
+| `RuleWright.Core` | Domain model: `Rule`, conditions, results, `IRuleFunction`. Zero dependencies. |
+| `RuleWright.Serialization` | JSON ↔ domain mapping, structural validator (JSON-pointer errors), content hashing. |
+| `RuleWright.Execution` | Expression-tree compiler, interpreter fallback, delegate cache, `RuleWrightBuilder` / `RuleWrightEngine`. |
+| `RuleWright.Json.SystemText` | `IRuleJsonReader` adapter for System.Text.Json + `JsonElement` fact helpers. |
+| `RuleWright.Json.NewtonsoftJson` | `IRuleJsonReader` adapter for Newtonsoft.Json + `JToken` fact helpers. |
+| `RuleWright.Extensions.Functions` | Built-in `custom`-operator predicates + registration/assembly-scan discovery helpers. |
 
 ## Non-goals for v1
 
@@ -440,7 +440,7 @@ Called out explicitly so expectations are clear:
   expressible. The `$` path prefix is reserved for adding this later.
 - **No persistence layer.** Storing rule JSON is your application's concern; this
   library parses, validates, compiles, and executes.
-- **No UI in v1.** The Blazor rule builder (`Rulewright.Sample.BlazorBuilder`, v3) is a
+- **No UI in v1.** The Blazor rule builder (`RuleWright.Sample.BlazorBuilder`, v3) is a
   sample, not part of the library, and it treats the JSON Schema and the validator built
   here as its contract. Its canvas positions nodes by auto-layout rather than persisting
   the schema's `layout` key — round-tripping `layout` is still a follow-up.
@@ -455,7 +455,7 @@ Called out explicitly so expectations are clear:
   actions, decision-table authoring, a schema discovery catalog (`RuleSchemaCatalog` +
   `engine.RegisteredFunctions`), System.Text.Json **and** Newtonsoft.Json adapters, and a
   published NRules/RulesEngine benchmark comparison (`docs/benchmarks.md`) have all shipped.
-- **v3 (current)** — Blazor WebAssembly rule builder (`samples/Rulewright.Sample.BlazorBuilder`)
+- **v3 (current)** — Blazor WebAssembly rule builder (`samples/RuleWright.Sample.BlazorBuilder`)
   emitting/consuming this exact schema, running fully client-side. Shipped: a freeform
   drag-and-drop node canvas covering the whole authoring surface — every condition operator,
   computed value-expressions, all four action types, `else` branches, and `custom` functions —
