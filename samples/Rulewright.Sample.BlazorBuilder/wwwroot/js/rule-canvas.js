@@ -1707,7 +1707,10 @@ window.rulewrightFlowBuilder = (function(){
       placeholder.defaultSelected = true;
     }
 
-    fetch('examples/manifest.json').then(r=>r.json()).then(list=>{
+    // GitHub Pages serves these with a ten-minute max-age, so a browser that has seen the picker
+    // before keeps listing yesterday's examples after a deploy adds one. 'no-cache' revalidates
+    // instead of skipping the request - a 304 when nothing changed, the new list when it has.
+    fetch('examples/manifest.json', { cache: 'no-cache' }).then(r=>r.json()).then(list=>{
       list.forEach(e=>{
         const opt = document.createElement('option');
         opt.value = e.file;
@@ -1724,7 +1727,7 @@ window.rulewrightFlowBuilder = (function(){
       if(!file) return;
       let loaded = false;
       try{
-        const res = await fetch('examples/' + file);
+        const res = await fetch('examples/' + file, { cache: 'no-cache' });
         if(!res.ok) throw new Error('HTTP ' + res.status);
         const doc = await res.json();
         loaded = await loadDocIntoCanvas(doc, `"${file}"`);
