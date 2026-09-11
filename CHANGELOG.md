@@ -30,6 +30,31 @@ published. Additive relative to 0.2.0: rules can now reason about collection fie
   `OperatorValueKind.Condition` and `ConditionOperatorInfo.RequiresElementCondition` so an
   authoring UI knows to offer a condition editor; `ExpressionOperatorCategory.Collection`.
 - [examples/20-collection-operators.json](examples/20-collection-operators.json).
+- **`stopAfterFirstMatch` on a rule-set document.** `RuleSet.StopAfterFirstMatch` arrived in 0.2.0,
+  but only a `first` decision table or a C# caller could set it; a JSON rule set can now state it
+  itself (`{ "name": "Shipping", "stopAfterFirstMatch": true, "rules": [ ... ] }`). It is ORed with
+  the caller's `EvaluationOptions.StopOnFirstMatch`, the Blazor builder offers it as a toggle, and
+  [examples/21-stop-after-first-match.json](examples/21-stop-after-first-match.json) shows it.
+
+### Fixed
+
+- **`count` was traced as `coalesce`.** `ConditionDescriber`'s expression-operator switch ended in
+  a catch-all arm returning `"coalesce"`, so the operator added after it described itself under the
+  previous one's name (`coalesce(Order.Lines) GreaterThan 3`). Evaluation was never affected, only
+  traces and rule descriptions. Every operator is now named explicitly, and an unrecognised one
+  falls back to its own name rather than to its predecessor's.
+- **The published JSON Schema rejected `stopAfterFirstMatch`.**
+  [docs/schema/rule-schema.json](docs/schema/rule-schema.json) closes the rule-set vocabulary with
+  `additionalProperties: false` and had not learned the property, so a document the engine accepted
+  — the shipped example included — failed schema-based validation in an editor or a CI job.
+
+### Testing
+
+- The JSON Schema and `RuleSetValidator` are held against each other now: every schema definition
+  that closes its vocabulary must name exactly the properties of the validator's matching list, and
+  a list or definition added to either side fails the suite until it is mapped to its counterpart.
+  They are two hand-maintained copies of one vocabulary and nothing compared them, which is how the
+  schema came to miss `stopAfterFirstMatch` while every example still loaded.
 
 ### Build
 
@@ -47,6 +72,10 @@ published. Additive relative to 0.2.0: rules can now reason about collection fie
 - Counting only the matching elements is a follow-up; `count` measures the whole collection.
 - A quantifier is one node in a trace — per-element results have no single slot — so its element
   condition is rendered into the node's description rather than traced separately.
+- Expression objects are the one place the schema and the engine still disagree, in the opposite
+  direction: the schema closes them with `additionalProperties: false`, while the C# validator
+  discriminates on `op`/`field`/`literal` and ignores an undefined sibling key. Closing it in C#
+  would reject documents that load today, so it is left for a deliberate change.
 
 ## [0.2.0]
 

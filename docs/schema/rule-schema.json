@@ -169,6 +169,11 @@
           "type": "string",
           "description": "Free-text documentation; ignored by the engine."
         },
+        "stopAfterFirstMatch": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, evaluation stops at the first rule whose condition passes; the default applies every matching rule. It is ORed with the caller's 'stopOnFirstMatch' evaluation option, and a 'first' hit-policy decision table expands into a rule set with it set."
+        },
         "rules": {
           "type": "array",
           "items": {

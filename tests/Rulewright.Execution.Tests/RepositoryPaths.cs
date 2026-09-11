@@ -27,6 +27,14 @@ internal static class RepositoryPaths
     internal static string BlazorBuilderCanvasScript { get; } = Path.Combine(
         RootDirectory, "samples", "Rulewright.Sample.BlazorBuilder", "wwwroot", "js", "rule-canvas.js");
 
+    /// <summary>
+    /// The published JSON Schema. It is a second, hand-maintained copy of the closed vocabulary
+    /// <c>RuleSetValidator</c> enforces at load, so <see cref="RuleSchemaFileTests"/> holds the two
+    /// against each other.
+    /// </summary>
+    internal static string RuleSchemaFile { get; } = Path.Combine(
+        RootDirectory, "docs", "schema", "rule-schema.json");
+
     /// <summary>The Blazor builder's page shell, which carries the node palette.</summary>
     internal static string BlazorBuilderCanvasPage { get; } = Path.Combine(
         RootDirectory, "samples", "Rulewright.Sample.BlazorBuilder", "Pages", "Canvas.razor");
