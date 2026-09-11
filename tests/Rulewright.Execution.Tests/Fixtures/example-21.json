@@ -1,0 +1,45 @@
+{
+  "ruleSet": {
+    "name": "Shipping fee ladder",
+    "stopAfterFirstMatch": true,
+    "rules": [
+      {
+        "id": "free-over-100",
+        "priority": 30,
+        "condition": { "field": "Order.Total", "operator": "GreaterThanOrEqual", "value": 100 },
+        "actions": [
+          { "type": "setOutput", "target": "ShippingFee", "value": 0 },
+          { "type": "setOutput", "target": "ShippingTier", "value": "free" }
+        ]
+      },
+      {
+        "id": "heavy-parcel",
+        "priority": 20,
+        "condition": { "field": "Order.Weight", "operator": "GreaterThan", "value": 2 },
+        "actions": [
+          { "type": "setOutput", "target": "ShippingFee", "value": 12 },
+          { "type": "setOutput", "target": "ShippingTier", "value": "heavy" }
+        ]
+      },
+      {
+        "id": "standard-shipping",
+        "priority": 10,
+        "condition": { "field": "Order.Total", "operator": "GreaterThan", "value": 0 },
+        "actions": [
+          { "type": "setOutput", "target": "ShippingFee", "value": 6 },
+          { "type": "setOutput", "target": "ShippingTier", "value": "standard" }
+        ]
+      }
+    ]
+  },
+  "fact": {
+    "Order": { "Total": 150, "Weight": 2.5 }
+  },
+  "expected": {
+    "firedRules": [ "free-over-100" ],
+    "outputs": {
+      "ShippingFee": 0,
+      "ShippingTier": "free"
+    }
+  }
+}

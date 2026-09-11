@@ -292,6 +292,9 @@
                 ruleId = rt.RuleId,
                 conditionPassed = rt.Fired,
                 skipped = rt.Skipped,
+                // Disabled and 'an earlier rule already matched' both leave a rule unevaluated,
+                // but they mean opposite things to whoever is reading the trace.
+                skipReason = rt.SkipReason == RuleSkipReason.None ? null : rt.SkipReason.ToString(),
                 firedBranch = firedBranch.TryGetValue(rt.RuleId, out string? b) ? b : null,
                 trace = ToTraceJson(rt.Condition),
             }).ToArray();

@@ -168,7 +168,8 @@ window.rulewrightFlowBuilder = (function(){
       el: null,
       _test: undefined,
       _fired: null,
-      _skipped: false
+      _skipped: false,
+      _skipReason: null
     };
     if(type === 'rule' && !node.config.id) node.config.id = uniqueRuleId();
     state.nodes.set(id, node);
@@ -1088,7 +1089,8 @@ window.rulewrightFlowBuilder = (function(){
       const enabled = rn && rn.config.enabled !== false;
       const fired = rn && rn._fired;
       const sel = state.selectedNode === u.ruleNodeId ? ' selected' : '';
-      const firedBadge = fired ? `<span class="rule-fired ${fired}">${fired}</span>` : (rn && rn._skipped ? `<span class="rule-skip">skipped</span>` : '');
+      const firedBadge = fired ? `<span class="rule-fired ${fired}">${fired}</span>`
+        : (rn && rn._skipped ? `<span class="rule-skip" title="Skipped: ${escapeHtml(skipReasonText(rn._skipReason))}">skipped</span>` : '');
       return `<div class="rule-chip${sel}" data-rule="${u.ruleNodeId}">
         <span class="rule-chip-dot${enabled?'':' off'}"></span>
         <span class="rule-chip-id">${escapeHtml(u.ruleId)}</span>
@@ -1308,7 +1310,7 @@ window.rulewrightFlowBuilder = (function(){
   }
 
   function clearTestHighlight(){
-    state.nodes.forEach(n=>{ n._test = undefined; n._fired = null; n._skipped = false; renderNode(n); });
+    state.nodes.forEach(n=>{ n._test = undefined; n._fired = null; n._skipped = false; n._skipReason = null; renderNode(n); });
     renderWires();
   }
 
@@ -1366,6 +1368,7 @@ window.rulewrightFlowBuilder = (function(){
       if(rn){
         rn._fired = rr.firedBranch || null;
         rn._skipped = !!rr.skipped;
+        rn._skipReason = rr.skipReason || null;
         rn._test = rr.firedBranch ? true : (rr.skipped ? undefined : false);
         renderNode(rn);
       }
@@ -1389,6 +1392,17 @@ window.rulewrightFlowBuilder = (function(){
     openDrawer('trace');
   }
 
+  // A skipped rule was never evaluated, so it has no condition trace to explain it - the reason
+  // is all the trace panel can show, and "an earlier rule matched" is the whole visible effect of
+  // stopAfterFirstMatch.
+  const SKIP_REASONS = {
+    Disabled: 'disabled',
+    StoppedAfterMatch: 'an earlier rule already matched'
+  };
+  function skipReasonText(reason){
+    return SKIP_REASONS[reason] || 'not evaluated';
+  }
+
   function renderTracePanel(rules){
     const container = document.getElementById('panelTrace');
     if(!rules || rules.length === 0){
@@ -1397,7 +1411,7 @@ window.rulewrightFlowBuilder = (function(){
     }
     let html = '';
     rules.forEach(r=>{
-      const status = r.skipped ? 'skipped' : (r.firedBranch ? `fired · ${r.firedBranch}` : 'did not fire');
+      const status = r.skipped ? `skipped · ${skipReasonText(r.skipReason)}` : (r.firedBranch ? `fired · ${r.firedBranch}` : 'did not fire');
       const cls = r.firedBranch ? 'pass' : (r.skipped ? '' : 'fail');
       html += `<div class="trace-rule">
         <span class="trace-rule-id">${escapeHtml(r.ruleId)}</span>
@@ -1650,14 +1664,16 @@ window.rulewrightFlowBuilder = (function(){
     return true;
   }
 
-  // The example picker shows which example the canvas came from, so every other way of replacing
-  // the canvas has to clear it rather than leave it naming a document that is no longer loaded.
+  // The set-level flag lives on state, not on a node, so the checkbox has to be pushed back in
+  // step with it whenever a document replaces the canvas.
   function setStopAfterFirstMatch(value){
     state.stopAfterFirstMatch = value === true;
     const box = document.getElementById('ruleSetStopFirst');
     if(box) box.checked = state.stopAfterFirstMatch;
   }
 
+  // The example picker shows which example the canvas came from, so every other way of replacing
+  // the canvas has to clear it rather than leave it naming a document that is no longer loaded.
   function clearExampleSelection(){
     const select = document.getElementById('exampleSelect');
     if(select) select.value = "";

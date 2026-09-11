@@ -1,0 +1,37 @@
+{
+  "name": "Shipping fee ladder",
+  "description": "'stopAfterFirstMatch' is the set's own semantics, stated in the document: evaluation stops after the first rule whose condition passes, whatever the caller asks for. Rules are evaluated highest priority first, so the set reads as a fallthrough ladder — the first rung that matches decides, and nothing below it runs. This is exactly what a 'first'-hit-policy decision table (10) expands into. Compare 02, which leaves the document collecting and asks the caller for EvaluationOptions.StopOnFirstMatch instead; the two combine with OR, so a caller can stop a collecting set early but cannot turn this one back into a collecting one.",
+  "stopAfterFirstMatch": true,
+  "rules": [
+    {
+      "id": "free-over-100",
+      "description": "Highest priority, so it is tried first — and it matches the sample order, which ends the evaluation right here.",
+      "priority": 30,
+      "condition": { "field": "Order.Total", "operator": "GreaterThanOrEqual", "value": 100 },
+      "actions": [
+        { "type": "setOutput", "target": "ShippingFee", "value": 0 },
+        { "type": "setOutput", "target": "ShippingTier", "value": "free" }
+      ]
+    },
+    {
+      "id": "heavy-parcel",
+      "description": "True of the sample order as well, and skipped anyway because a higher-priority rule already matched. Without stopAfterFirstMatch every matching rule fires and the LOWEST-priority one has the last word on the shared outputs — the opposite of what this ladder reads like.",
+      "priority": 20,
+      "condition": { "field": "Order.Weight", "operator": "GreaterThan", "value": 2 },
+      "actions": [
+        { "type": "setOutput", "target": "ShippingFee", "value": 12 },
+        { "type": "setOutput", "target": "ShippingTier", "value": "heavy" }
+      ]
+    },
+    {
+      "id": "standard-shipping",
+      "description": "The catch-all at the bottom of the ladder: lowest priority, widest condition. It decides only when nothing above it matched.",
+      "priority": 10,
+      "condition": { "field": "Order.Total", "operator": "GreaterThan", "value": 0 },
+      "actions": [
+        { "type": "setOutput", "target": "ShippingFee", "value": 6 },
+        { "type": "setOutput", "target": "ShippingTier", "value": "standard" }
+      ]
+    }
+  ]
+}

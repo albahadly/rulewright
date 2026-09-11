@@ -390,6 +390,9 @@ var result = engine.Evaluate(rules, fact, new EvaluationOptions { StopOnFirstMat
   with OR: a caller can stop a collecting set early, but cannot turn this one into a collecting
   one. Omitted means `false`, so documents written before this property keep their behaviour.
 
+  See [`examples/21-stop-after-first-match.json`](examples/21-stop-after-first-match.json) for the
+  whole thing as a fallthrough ladder.
+
 ## 7. Decision tables
 
 For logic that reads as a grid. Each input column maps a cell to a condition; each output column

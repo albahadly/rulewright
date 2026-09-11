@@ -78,5 +78,9 @@
   {
     "file": "20-collection-operators.json",
     "description": "Any / All / None over a collection field, \"$\" for scalar elements, and count."
+  },
+  {
+    "file": "21-stop-after-first-match.json",
+    "description": "stopAfterFirstMatch: the document itself stops evaluation at the first rule that passes, without the caller asking for it."
   }
 ]

@@ -19,6 +19,18 @@ internal static class RepositoryPaths
     internal static string BlazorBuilderExamples { get; } = Path.Combine(
         RootDirectory, "samples", "Rulewright.Sample.BlazorBuilder", "wwwroot", "examples");
 
+    /// <summary>
+    /// The Blazor builder's canvas script. It hardcodes its own copies of the operator and action
+    /// vocabularies in JavaScript, so <see cref="BlazorBuilderVocabularyTests"/> holds them against
+    /// <c>RuleSchemaCatalog</c>.
+    /// </summary>
+    internal static string BlazorBuilderCanvasScript { get; } = Path.Combine(
+        RootDirectory, "samples", "Rulewright.Sample.BlazorBuilder", "wwwroot", "js", "rule-canvas.js");
+
+    /// <summary>The Blazor builder's page shell, which carries the node palette.</summary>
+    internal static string BlazorBuilderCanvasPage { get; } = Path.Combine(
+        RootDirectory, "samples", "Rulewright.Sample.BlazorBuilder", "Pages", "Canvas.razor");
+
     private static string FindRoot()
     {
         DirectoryInfo? directory = new DirectoryInfo(AppContext.BaseDirectory);

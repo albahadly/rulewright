@@ -69,6 +69,8 @@ or must exist on the type (typed facts) — see `05-null-and-coalesce.json`.
 | [17-disabled-rule.json](17-disabled-rule.json) | `enabled: false` retires a rule without deleting it — it is skipped entirely. |
 | [18-builtin-functions.json](18-builtin-functions.json) | `Rulewright.Extensions.Functions`' curated built-in `custom` predicates: `IsEmail`, `EqualsIgnoreCase`, `DivisibleBy`, `IsPositive`. |
 | [19-decision-table-computed-cell.json](19-decision-table-computed-cell.json) | A decision table `then` cell is an expression, not just a constant — a pricing table computes its output from the fact. |
+| [20-collection-operators.json](20-collection-operators.json) | Collection quantifiers: `Any` / `All` / `None` over a collection field, `"$"` for scalar elements, and `count`. |
+| [21-stop-after-first-match.json](21-stop-after-first-match.json) | `stopAfterFirstMatch` — the *set’s own* semantics: evaluation stops at the first rule that passes, with no option from the caller (compare 02). |
 
 ## Key ideas the examples lean on
 
