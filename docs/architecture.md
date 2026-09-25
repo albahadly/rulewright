@@ -274,8 +274,9 @@ in the benchmark suite rather than hidden.
 
 Libraries target `net48;netstandard2.0;net8.0;net10.0`, set once in
 `src/Directory.Build.props`. Everything is written against the netstandard2.0 API
-surface; C# language features used are syntax-only (no `IsExternalInit`, no
-`System.Index`), which is why no compiler shims are needed for the down-level legs.
+surface. The one compiler shim is `IsExternalInit` (in `RuleWright.Core/Compatibility`), which
+lets `EvaluationOptions` use `init` accessors on the down-level legs; beyond it, C# features are
+syntax-only (no records, no `System.Index`).
 The net48 leg is enforced three ways: the test projects run on net48, the
 `RuleWright.Sample.NetFramework48` smoke test runs in CI, and the System.Text.Json
 adapter takes the package reference only on `net48`/`netstandard2.0` (net8.0 and

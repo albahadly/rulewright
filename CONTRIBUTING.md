@@ -25,8 +25,9 @@ Thanks for your interest! Issues, discussions, and pull requests are all welcome
 ## Ground rules
 
 - **`RuleWright.Core` stays zero-dependency** and every library keeps compiling for
-  `netstandard2.0`. Use only syntax-level C# features there (no `init`, no records,
-  no `System.Index/Range`).
+  `netstandard2.0`. Use only C# features that need no runtime or polyfill types there:
+  `init` accessors are fine (`Compatibility/IsExternalInit.cs` supplies the marker type
+  down-level), but no records and no `System.Index`/`Range`.
 - **The JSON schema is a contract.** Changes to `docs/schema/rule-schema.json`, the
   validator, or observable evaluation semantics must update the golden-file fixtures
   (`tests/RuleWright.Execution.Tests/Fixtures`) deliberately — a fixture change is a
