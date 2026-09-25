@@ -1,6 +1,7 @@
 {
   "decisionTable": {
     "name": "Shipping cost",
+    "description": "A decision table with hitPolicy 'first': rows are tried top to bottom and only the first one that matches applies, so the most specific rows come first and an all-wildcard row closes the table as the default. A null 'when' cell is a wildcard. The table expands into one ordinary rule per row, and 'first' makes the expanded set stop after its first match.",
     "id": "shipping",
     "hitPolicy": "first",
     "inputs": [

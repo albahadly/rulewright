@@ -53,7 +53,19 @@ app.MapPost("/evaluate", (EvaluateRequest request, RuleWrightEngine engine, Load
         return Results.BadRequest("'fact' must be a JSON object.");
     }
 
-    Dictionary<string, object?> fact = SystemTextJsonFacts.ToDictionary(request.Fact);
+    // Web clients usually send camelCase ("order": { "total": … }). Matching keys without regard
+    // to case lets the rules' Order.Total find it, as a typed fact's members would.
+    Dictionary<string, object?> fact;
+    try
+    {
+        fact = SystemTextJsonFacts.ToDictionary(request.Fact, StringComparer.OrdinalIgnoreCase);
+    }
+    catch (ArgumentException ex)
+    {
+        // Two properties differing only in case ("Total" and "total"): ambiguous, so refuse it.
+        return Results.BadRequest(ex.Message);
+    }
+
     RuleEvaluationResult result = engine.Evaluate(
         loaded, fact, new EvaluationOptions { EnableTrace = request.Trace });
 

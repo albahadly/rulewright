@@ -20,7 +20,8 @@
     <File Path="examples/17-disabled-rule.json" />
     <File Path="examples/18-builtin-functions.json" />
     <File Path="examples/19-decision-table-computed-cell.json" />
-    <File Path="examples/20-collection-operators.json.json" />
+    <File Path="examples/20-collection-operators.json" />
+    <File Path="examples/21-stop-after-first-match.json" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/RuleWright.Sample.AspNetCore/RuleWright.Sample.AspNetCore.csproj" />

@@ -70,7 +70,11 @@ var engine = new RuleWrightBuilder()
 
 LoadedRuleSet rules = engine.LoadRuleSet(json);
 
-var fact = new Order { Customer = new Customer { Age = 30 }, Total = 150m };
+var fact = new Checkout
+{
+    Customer = new Customer { Age = 30 },
+    Order = new Order { Total = 150m },
+};
 RuleEvaluationResult result = engine.Evaluate(rules, fact);
 
 Console.WriteLine(result.Outputs["DiscountPercent"]);   // 10
@@ -91,17 +95,28 @@ cached on the engine — so keep the engine alive.
 ## 2. Facts: typed or dynamic
 
 A **typed fact** (any POCO) takes the compiled path — field paths become null-guarded member
-access, comparison constants are converted to the field's exact CLR type at compile time:
+access, comparison constants are converted to the field's exact CLR type at compile time. Paths
+start at the fact itself, so `Customer.Age` and `Order.Total` read a fact shaped like this:
 
 ```csharp
-public sealed class Order
+public sealed class Checkout
 {
     public Customer Customer { get; set; } = new();
+    public Order Order { get; set; } = new();
+}
+
+public sealed class Customer
+{
+    public int Age { get; set; }
+}
+
+public sealed class Order
+{
     public decimal Total { get; set; }
     public string? Coupon { get; set; }
 }
 
-RuleEvaluationResult result = engine.Evaluate(rules, order);
+RuleEvaluationResult result = engine.Evaluate(rules, checkout);
 Console.WriteLine(result.CompilationMode);   // Compiled
 ```
 
@@ -111,7 +126,7 @@ A **dictionary fact** takes the interpreter — use it when the shape is only kn
 var fact = new Dictionary<string, object?>
 {
     ["Customer"] = new Dictionary<string, object?> { ["Age"] = 30L },
-    ["Total"] = 150m,
+    ["Order"] = new Dictionary<string, object?> { ["Total"] = 150m },
 };
 
 RuleEvaluationResult result = engine.Evaluate(rules, fact);
@@ -130,8 +145,8 @@ RuleEvaluationResult result = engine.Evaluate(rules, fact);
 ```
 
 > **Type the variable, not just the object.** `Evaluate` compiles against the *static* type, so
-> `object fact = new Order(...)` has no fields to bind and quietly falls back to the interpreter.
-> Declare it as `Order` (or use `var`) to get the compiled path.
+> `object fact = new Checkout(...)` has no fields to bind and quietly falls back to the interpreter.
+> Declare it as `Checkout` (or use `var`) to get the compiled path.
 
 ## 3. Conditions
 
@@ -174,7 +189,20 @@ return `false`, with four exceptions: `IsNull` → `true`, `NotEquals` against a
 exactly like a null field, and nothing ever throws for a null.
 
 **Field paths** are dotted (`Customer.Address.City`) and resolve case-insensitively against
-properties and public fields on POCOs. Dictionary keys match exactly.
+properties and public fields on POCOs. Dictionary keys match through the dictionary's own
+comparer: exactly, for the default `Dictionary<string, object?>` and for
+`SystemTextJsonFacts.ToDictionary(json)`. That catches out JSON from web clients, which is usually
+camelCase — `{"order":{"total":150}}` has no `Order.Total`, so the rule reads null and quietly
+doesn't fire. Ask for case-insensitive keys when you convert it:
+
+```csharp
+Dictionary<string, object?> fact = SystemTextJsonFacts.ToDictionary(
+    document.RootElement, StringComparer.OrdinalIgnoreCase);   // every level, arrays included
+```
+
+Two properties that differ only in case (`"Total"` and `"total"` in one object) then throw
+`ArgumentException` rather than one silently replacing the other. A dictionary you build yourself
+works the same way: `new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)`.
 
 ## 4. Actions: writing outputs
 
@@ -610,7 +638,8 @@ builder.Services.AddSingleton(provider =>
 
 app.MapPost("/evaluate", (EvaluateRequest request, RuleWrightEngine engine, LoadedRuleSet rules) =>
 {
-    Dictionary<string, object?> fact = SystemTextJsonFacts.ToDictionary(request.Fact);
+    // Web clients send camelCase; match the rules' paths without regard to case.
+    Dictionary<string, object?> fact = SystemTextJsonFacts.ToDictionary(request.Fact, StringComparer.OrdinalIgnoreCase);
     RuleEvaluationResult result = engine.Evaluate(rules, fact);
     return Results.Ok(new { result.Outputs, fired = result.FiredRules.Select(r => r.RuleId) });
 });
@@ -708,6 +737,6 @@ NativeAOT use dictionary facts; `CompilationMode.Interpreted` confirms which pat
 
 ---
 
-Runnable versions of most of the above live in [`examples/`](examples/) (19 documents, each
+Runnable versions of most of the above live in [`examples/`](examples/) (21 documents, each
 validated by the test suite) and [`samples/`](samples/) (console, ASP.NET Core, decision tables,
 custom functions, .NET Framework 4.8, and the Blazor editor).

@@ -1,6 +1,7 @@
 {
   "decisionTable": {
     "name": "Loyalty points",
+    "description": "A decision table with hitPolicy 'collect': every row that matches applies, in row order. Its output columns use addToOutput and appendToOutput, so the matching rows add up a points total and collect the reasons for it. A null 'when' cell is a wildcard, so each row tests only its own column.",
     "id": "points",
     "hitPolicy": "collect",
     "inputs": [

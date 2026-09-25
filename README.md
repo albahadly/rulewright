@@ -129,6 +129,9 @@ strong-named, and ship symbols (`.snupkg`) with Source Link.
 > **New here?** [usage.md](usage.md) is a task-oriented guide — first rule, fact shapes, actions,
 > computed values, decision tables, custom functions, validation, tracing, and hosting — with
 > runnable snippets throughout. This README is the reference.
+>
+> The full documentation — tutorials, guides, concepts and the API reference, with every snippet
+> compiled and run against this source — is at **https://docs.albahadly.com/rulewright/**.
 
 ## Concepts
 
@@ -207,8 +210,11 @@ catastrophic backtracking pin a thread. Change the bound with
   surprise. Navigation is null-safe: a null intermediate applies the operator's null
   semantics instead of throwing.
 - **Dictionary facts**: nested dictionaries, with cached-reflection fallback for POCOs
-  stored inside dictionaries. Missing keys resolve to null. The result reports
-  `CompilationMode.Interpreted` so the slower path is visible, never silent.
+  stored inside dictionaries. Missing keys resolve to null. Keys match through the
+  dictionary's own comparer — exactly, by default — so for camelCase JSON from web clients,
+  convert with `SystemTextJsonFacts.ToDictionary(json, StringComparer.OrdinalIgnoreCase)`
+  (or the Newtonsoft equivalent). The result reports `CompilationMode.Interpreted` so the
+  slower path is visible, never silent.
 
 ### Computed left-hand sides
 

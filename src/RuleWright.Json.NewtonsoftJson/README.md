@@ -47,6 +47,17 @@ Numbers follow the same policy as the other adapter — `long` when integral, ot
 when exactly representable, otherwise `double` — so the two adapters produce identical facts
 from identical JSON.
 
+Keys match exactly by default, and a rule's `Order.Total` does not find a camelCase
+`"order": { "total": … }` — which is what most web clients send. Pass a key comparer to match
+without regard to case, at every level:
+
+```csharp
+Dictionary<string, object?> fact = NewtonsoftJsonFacts.ToDictionary(payload, StringComparer.OrdinalIgnoreCase);
+```
+
+Two properties of one object that the comparer treats as the same key (`"Total"` and `"total"`)
+throw `ArgumentException` rather than one silently replacing the other.
+
 ## Requirements
 
 .NET Framework 4.8, .NET Standard 2.0, .NET 8.0 or .NET 10.0. Depends on Newtonsoft.Json 13.

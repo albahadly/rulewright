@@ -5,6 +5,27 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0, breaking changes may land
 in a minor version; each one is called out below.
 
+## [Unreleased]
+
+### Added
+
+- **Case-insensitive JSON facts, opt-in.** `SystemTextJsonFacts.ToDictionary(element, keyComparer)`
+  and `NewtonsoftJsonFacts.ToDictionary(token, keyComparer)` build every level of the fact with
+  the given key comparer, and the interpreter looks each path segment up through it. Rule paths
+  already match a typed fact's members without regard to case, but dictionary keys matched
+  exactly — so the camelCase JSON most web clients send (`{"order":{"total":150}}`) left
+  `Order.Total` reading null, and the rule quietly didn't fire. With
+  `StringComparer.OrdinalIgnoreCase` it matches. Two properties of one object that the comparer
+  treats as the same key (`"Total"` and `"total"`) throw `ArgumentException` instead of one
+  replacing the other. The one-argument overloads are unchanged: keys still match exactly.
+  The ASP.NET Core sample now converts its request body this way.
+
+### Fixed
+
+- `usage.md` §1 and §2 evaluated rules reading `Order.Total` against facts with no `Order` member
+  (the first threw `RuleCompilationException`, the second silently never fired). Both now use a
+  `Checkout { Customer, Order }` fact.
+
 ## [0.3.0]
 
 The first release since 0.1.1 — it carries everything in 0.2.0 below as well, which was never
