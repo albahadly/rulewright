@@ -75,8 +75,10 @@ A **new capability** gets its own guide page, a sample, a row in `guides/toc.yml
   and add a `ctx.Check` for the claim. Statements with no sample of their own, and hand-written
   JSON fragments in page prose, are pinned in `samples/Reference/PageClaims.cs`: add a line there
   whenever a page states a behaviour. Writing it caught four wrong statements before they shipped.
-- **Dictionary facts match keys case-sensitively.** `PostAsJsonAsync` writes camelCase; the web
-  API sample silently evaluated an empty order until its checks demanded the real outputs.
+- **Dictionary facts match keys through their comparer, exact by default.** `PostAsJsonAsync`
+  writes camelCase; the web API sample silently evaluated an empty order until its checks
+  demanded the real outputs. The JSON fact helpers now take a key comparer, and the tutorial's
+  server uses `StringComparer.OrdinalIgnoreCase`: keep a check on the real outputs anyway.
 - **Compilation is lazy per rule.** A warm-up `Evaluate` compiles only the rules it reaches.
 - **Keep JSON leaves on one line.** Rule documents in `samples/assets/` are formatted with
   containers expanded and leaves inline, so they read well at the site's code width.
