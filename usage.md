@@ -189,7 +189,20 @@ return `false`, with four exceptions: `IsNull` → `true`, `NotEquals` against a
 exactly like a null field, and nothing ever throws for a null.
 
 **Field paths** are dotted (`Customer.Address.City`) and resolve case-insensitively against
-properties and public fields on POCOs. Dictionary keys match exactly.
+properties and public fields on POCOs. Dictionary keys match through the dictionary's own
+comparer: exactly, for the default `Dictionary<string, object?>` and for
+`SystemTextJsonFacts.ToDictionary(json)`. That catches out JSON from web clients, which is usually
+camelCase — `{"order":{"total":150}}` has no `Order.Total`, so the rule reads null and quietly
+doesn't fire. Ask for case-insensitive keys when you convert it:
+
+```csharp
+Dictionary<string, object?> fact = SystemTextJsonFacts.ToDictionary(
+    document.RootElement, StringComparer.OrdinalIgnoreCase);   // every level, arrays included
+```
+
+Two properties that differ only in case (`"Total"` and `"total"` in one object) then throw
+`ArgumentException` rather than one silently replacing the other. A dictionary you build yourself
+works the same way: `new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)`.
 
 ## 4. Actions: writing outputs
 
@@ -625,7 +638,8 @@ builder.Services.AddSingleton(provider =>
 
 app.MapPost("/evaluate", (EvaluateRequest request, RuleWrightEngine engine, LoadedRuleSet rules) =>
 {
-    Dictionary<string, object?> fact = SystemTextJsonFacts.ToDictionary(request.Fact);
+    // Web clients send camelCase; match the rules' paths without regard to case.
+    Dictionary<string, object?> fact = SystemTextJsonFacts.ToDictionary(request.Fact, StringComparer.OrdinalIgnoreCase);
     RuleEvaluationResult result = engine.Evaluate(rules, fact);
     return Results.Ok(new { result.Outputs, fired = result.FiredRules.Select(r => r.RuleId) });
 });

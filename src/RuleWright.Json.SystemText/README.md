@@ -46,6 +46,17 @@ when integral, otherwise `decimal` when exactly representable, otherwise `double
 policy the rule parser applies to constants, so a fact and a rule constant of the same JSON
 text compare as equal.
 
+Keys match exactly by default, and a rule's `Order.Total` does not find a camelCase
+`"order": { "total": … }` — which is what most web clients send. Pass a key comparer to match
+without regard to case, at every level:
+
+```csharp
+Dictionary<string, object?> fact = SystemTextJsonFacts.ToDictionary(payload.RootElement, StringComparer.OrdinalIgnoreCase);
+```
+
+Two properties of one object that the comparer treats as the same key (`"Total"` and `"total"`)
+throw `ArgumentException` rather than one silently replacing the other.
+
 ## Requirements
 
 .NET Framework 4.8, .NET Standard 2.0, .NET 8.0 or .NET 10.0. System.Text.Json is in-box from

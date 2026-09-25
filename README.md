@@ -210,8 +210,11 @@ catastrophic backtracking pin a thread. Change the bound with
   surprise. Navigation is null-safe: a null intermediate applies the operator's null
   semantics instead of throwing.
 - **Dictionary facts**: nested dictionaries, with cached-reflection fallback for POCOs
-  stored inside dictionaries. Missing keys resolve to null. The result reports
-  `CompilationMode.Interpreted` so the slower path is visible, never silent.
+  stored inside dictionaries. Missing keys resolve to null. Keys match through the
+  dictionary's own comparer — exactly, by default — so for camelCase JSON from web clients,
+  convert with `SystemTextJsonFacts.ToDictionary(json, StringComparer.OrdinalIgnoreCase)`
+  (or the Newtonsoft equivalent). The result reports `CompilationMode.Interpreted` so the
+  slower path is visible, never silent.
 
 ### Computed left-hand sides
 
