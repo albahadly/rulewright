@@ -97,6 +97,24 @@ case, RuleWright is also measurably faster and leaner than both — see
 [`docs/benchmarks.md`](docs/benchmarks.md) for a like-for-like harness (with a
 fairness check that all three flag the same matches).
 
+#### Coming from Microsoft RulesEngine
+
+Every RulesEngine concept has a RuleWright form — redesigned to keep rules pure data
+(anything that is *code* is registered C#, named from the document and checked at load):
+
+| Microsoft RulesEngine | RuleWright |
+|---|---|
+| Lambda expression strings in JSON | Closed expression vocabulary + `{ "call": … }` into registered value functions — deliberately no embedded code |
+| `RuleParameter[]` (named inputs `input1`, `input2`, …) | `RuleFacts.With("customer", c).And("order", o)` — or a composite POCO for the compiled path |
+| `GlobalParams` / `LocalParams` | `params` on the rule set / rule, referenced as `{ "param": "…" }` |
+| `ReSettings.CustomTypes` (methods in lambdas) | `RegisterFunction` (condition predicates) + `RegisterValueFunction` (computed values) |
+| Custom actions, `OutputExpression` | `RegisterAction(name, handler)`; computed action values are built in |
+| `ErrorMessage` per rule | `failureMessage`, surfaced as `result.Failures` |
+| `SuccessEvent`, `OnSuccess`/`OnFail` | `result.FiredRules` / outputs — the result object is the event |
+| `WorkflowsToInject` | `RuleSet.Merge(...)` at load time; documents stay self-contained |
+| `RuleResultTree` | `FiredRules` + opt-in per-node `Trace` + `Failures` |
+| `EvaluateRule` chaining, nested rule results | Not imported: no forward chaining by design (see [non-goals](#non-goals-for-v1)) |
+
 ## Install
 
 ```
@@ -137,11 +155,11 @@ strong-named, and ship symbols (`.snupkg`) with Source Link.
 
 | Term | Meaning |
 |---|---|
-| **Rule** | `id` + condition tree + `actions` (+ optional `else` actions, `priority`, `enabled`, ignored `layout`). |
-| **Rule set** | `rules` (+ optional `name`, `description`, and `stopAfterFirstMatch` — stop at the first rule that passes, which is what a `first` decision table expands into). |
+| **Rule** | `id` + condition tree + `actions` (+ optional `else` actions, `priority`, `enabled`, `failureMessage`, local `params`, ignored `layout`). |
+| **Rule set** | `rules` (+ optional `name`, `description`, global `params`, and `stopAfterFirstMatch` — stop at the first rule that passes, which is what a `first` decision table expands into). |
 | **Condition** | A leaf (`field` / `operator` / `value`) or a group (`AND` / `OR` / `NOT` over children). |
-| **Fact** | The object a rule set is evaluated against: a typed POCO (compiled path) or an `IDictionary<string, object>` (interpreted path). |
-| **Action** | Changes the outputs at `target`. `setOutput` replaces, `addToOutput` sums, `appendToOutput` collects into a list, `removeOutput` deletes. Runs from `actions` when the condition matches, or `else` when it does not. |
+| **Fact** | The object a rule set is evaluated against: a typed POCO (compiled path), an `IDictionary<string, object>` (interpreted path), or several named facts via `RuleFacts` (interpreted). |
+| **Action** | Changes the outputs at `target`. `setOutput` replaces, `addToOutput` sums, `appendToOutput` collects into a list, `removeOutput` deletes — plus any custom action type registered on the builder. Runs from `actions` when the condition matches, or `else` when it does not. |
 
 ### Operators
 
@@ -258,8 +276,9 @@ key, and a constant is simply the simplest expression:
 
 Values are **pure data** — a closed operator vocabulary, never embedded code — so a UI can
 generate them and a reviewer can diff them, exactly like conditions. A value is a bare scalar
-(a literal), `{ "field": "<dotted path>" }`, `{ "literal": <scalar> }`, or
-`{ "op": "<operator>", "operands": [ … ] }`:
+(a literal), `{ "field": "<dotted path>" }`, `{ "literal": <scalar> }`,
+`{ "op": "<operator>", "operands": [ … ] }`, `{ "call": "<registered value function>",
+"operands": [ … ] }`, or `{ "param": "<name>" }` (a scoped-param reference):
 
 | Category | Operators |
 |---|---|
@@ -315,6 +334,99 @@ or `Else` telling you which side ran.
 }
 ```
 
+### Scoped params — name a computed value once
+
+`params` declares **named subexpressions**: define an expression once on the rule set (global)
+or a rule (local, shadowing the set's on a name collision), then reference it anywhere an
+expression is valid in that scope — action values, computed left-hand sides, decision-table
+cells — as `{ "param": "<name>" }`:
+
+```json
+{
+  "params": {
+    "averageItem": { "op": "divide", "operands": [ { "field": "Order.Total" }, { "field": "Order.ItemCount" } ] }
+  },
+  "rules": [
+    { "id": "pricey",
+      "condition": { "expression": { "param": "averageItem" }, "operator": "GreaterThan", "value": 25 },
+      "actions": [ { "type": "setOutput", "target": "AverageItemPrice", "value": { "param": "averageItem" } } ] }
+  ]
+}
+```
+
+Params may reference sibling and outer params (never cyclically — validation rejects cycles
+with a pointer), and stay pure data end to end. References are **inlined at load time**, so
+the domain model, the content hash, and both execution paths never see them: a param-authored
+document compiles to exactly the delegates its hand-inlined equivalent does, and the C# way to
+"use a param" is simply to reuse one immutable `ValueExpression` instance in several places.
+One consequence to know: a param cannot be referenced inside a quantifier's per-element
+`condition`, whose field paths resolve against the element rather than the root fact. See
+[examples/22-scoped-params.json](examples/22-scoped-params.json).
+
+### Registered extensions — value functions and custom actions
+
+When the closed vocabulary genuinely doesn't cover something, the escape hatch is always the
+same shape: the document **names** a thing, and the behaviour is C# registered on the builder,
+checked at `LoadRuleSet` — never code in the rule file. Three registration points:
+
+| Registration | Referenced from JSON as | Adds |
+|---|---|---|
+| `RegisterFunction(name, (field, value) => bool)` | `{ "operator": "custom", "name": … }` | A condition predicate |
+| `RegisterValueFunction(name, args => object?)` | `{ "call": name, "operands": [ … ] }` | A computed value usable in any expression |
+| `RegisterAction(name, context => { … })` | `{ "type": name, "target": …, "value": … }` | An action over the running outputs |
+
+```csharp
+var engine = new RuleWrightBuilder()
+    .UseJsonReader(new SystemTextJsonReader())
+    .RegisterValueFunction("RoundTo", args =>
+        args is [decimal value, long digits] ? decimal.Round(value, (int)digits) : null)
+    .RegisterAction("setIfHigher", ctx =>
+    {
+        ctx.TryGetOutput(ctx.Target, out object? current);
+        if (ctx.Value is decimal bid && (current is not decimal held || bid > held))
+        {
+            ctx.SetOutput(ctx.Target, bid);
+        }
+    })
+    .Build();
+```
+
+A value function is bound into compiled rules at compile time (one virtual call per
+evaluation, no lookup), should be **total** like the built-in operators, and may declare a
+required operand count via `IRuleValueFunctionMetadata` — enforced at load. A custom action
+receives a `RuleActionContext` (rule id, branch, target, the already-evaluated value, the
+fact, and read/write access to the running outputs); its writes land in the merged outputs
+and the firing rule's own snapshot exactly as the built-in types record theirs. An
+unregistered `call` or action type fails at `LoadRuleSet`, and `engine.Validate` folds the
+registered action names into the schema contract so misspellings are still caught. See
+[examples/23-value-functions.json](examples/23-value-functions.json) and
+[examples/25-custom-action.json](examples/25-custom-action.json).
+
+### Failure messages, multiple facts, and composition
+
+**`failureMessage`** is a rule's authored explanation for saying no. When a rule is evaluated
+and its condition does not pass, the message surfaces on
+`RuleEvaluationResult.Failures` (rule id + message); skipped rules — disabled, or unreached
+after a stop-on-first-match — report nothing. Like `description`, it never changes what the
+rule computes and stays out of the content hash. See
+[examples/24-failure-messages.json](examples/24-failure-messages.json).
+
+**`RuleFacts`** evaluates several named facts as one, each addressed by its name as the first
+path segment — the multi-input shape:
+
+```csharp
+var facts = RuleFacts.With("customer", customer).And("order", order);
+var result = engine.Evaluate(rules, facts);   // rules read customer.Age, order.Total
+```
+
+A `RuleFacts` is a dictionary fact, so it runs the interpreter (and says so via
+`CompilationMode.Interpreted`); when the compiled path matters, wrap the same inputs in a
+composite POCO — the two spell identical field paths.
+
+**`RuleSet.Merge(sets, name, stopAfterFirstMatch)`** composes several rule sets into one at
+load time, with duplicate rule ids failing loudly. Composition is deliberately a C# concern:
+rule *documents* stay self-contained, with no include mechanism to resolve.
+
 ### Decision tables
 
 For logic that reads naturally as a grid, a **decision table** is a compact authoring form.
@@ -356,8 +468,9 @@ output cell skips that output for the row. Two hit policies:
 The rule schema is a **closed, pure-data vocabulary** — and it is introspectable at runtime, so
 a rule-builder UI (or codegen, or docs) can enumerate exactly what it may author instead of
 hard-coding operator lists. `RuleSchemaCatalog` exposes the built-in vocabulary as structured
-metadata, and `engine.RegisteredFunctions` exposes the `custom` functions registered on a given
-engine — together, the complete set of authoring choices.
+metadata, and the engine exposes what varies per configuration — `RegisteredFunctions`
+(`custom` condition functions), `RegisteredValueFunctions` (`call` targets), and
+`RegisteredActions` (custom action types) — together, the complete set of authoring choices.
 
 ```csharp
 foreach (var op in RuleSchemaCatalog.ConditionOperators)
@@ -369,6 +482,8 @@ RuleSchemaCatalog.ActionTypes;          // setOutput/addToOutput/appendToOutput/
 RuleSchemaCatalog.LogicalOperators;     // AND/OR/NOT + child arity
 
 engine.RegisteredFunctions;             // e.g. ["IsBusinessDay", "IsWeekend"] — for the custom operator
+engine.ValueFunctionCatalog;            // call targets: name, description, declared operand count
+engine.RegisteredActions;               // custom action types accepted alongside the built-in four
 ```
 
 The catalog is **derived from the same maps and enums the parser and validator use**, so it can

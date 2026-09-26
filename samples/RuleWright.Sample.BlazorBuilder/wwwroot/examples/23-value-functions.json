@@ -1,0 +1,36 @@
+{
+  "name": "Value functions",
+  "description": "A { \"call\": ... } expression invokes a value function registered in C# (RuleWrightBuilder.RegisterValueFunction(\"RoundTo\", ...)). The document names the function; the behaviour stays registered code, and an unregistered name fails at load. Calls work anywhere an expression does: action values, a condition's left-hand side, decision-table cells.",
+  "rules": [
+    {
+      "id": "rounded-discount",
+      "description": "call composes with the built-in operators: round(Total * 0.1) to 2 digits.",
+      "condition": { "field": "Order.Total", "operator": "GreaterThanOrEqual", "value": 50 },
+      "actions": [
+        {
+          "type": "setOutput",
+          "target": "Discount",
+          "value": {
+            "call": "RoundTo",
+            "operands": [
+              { "op": "multiply", "operands": [ { "field": "Order.Total" }, 0.1 ] },
+              2
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "big-rounded-total",
+      "description": "A call as a condition's computed left-hand side.",
+      "condition": {
+        "expression": { "call": "RoundTo", "operands": [ { "field": "Order.Total" }, 0 ] },
+        "operator": "GreaterThanOrEqual",
+        "value": 150
+      },
+      "actions": [
+        { "type": "setOutput", "target": "BigOrder", "value": true }
+      ]
+    }
+  ]
+}

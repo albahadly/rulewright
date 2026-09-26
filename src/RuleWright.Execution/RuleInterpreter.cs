@@ -34,8 +34,7 @@ internal static class RuleInterpreter
         ConditionNode node,
         int index,
         object fact,
-        IReadOnlyDictionary<string, IRuleFunction> functions,
-        TimeSpan regexTimeout,
+        EvaluationServices services,
         bool?[]? results,
         int[]? layout)
     {
@@ -50,7 +49,7 @@ internal static class RuleInterpreter
                     int childIndex = index + 1;
                     foreach (ConditionNode child in group.Children)
                     {
-                        if (!Evaluate(child, childIndex, fact, functions, regexTimeout, results, layout))
+                        if (!Evaluate(child, childIndex, fact, services, results, layout))
                         {
                             outcome = false;
                             break;
@@ -71,7 +70,7 @@ internal static class RuleInterpreter
                     int childIndex = index + 1;
                     foreach (ConditionNode child in group.Children)
                     {
-                        if (Evaluate(child, childIndex, fact, functions, regexTimeout, results, layout))
+                        if (Evaluate(child, childIndex, fact, services, results, layout))
                         {
                             outcome = true;
                             break;
@@ -87,13 +86,13 @@ internal static class RuleInterpreter
                 }
 
                 default:
-                    outcome = !Evaluate(group.Children[0], index + 1, fact, functions, regexTimeout, results, layout);
+                    outcome = !Evaluate(group.Children[0], index + 1, fact, services, results, layout);
                     break;
             }
         }
         else
         {
-            outcome = EvaluateLeaf((ConditionLeaf)node, fact, functions, regexTimeout);
+            outcome = EvaluateLeaf((ConditionLeaf)node, fact, services);
         }
 
         if (results is not null)
@@ -104,17 +103,13 @@ internal static class RuleInterpreter
         return outcome;
     }
 
-    private static bool EvaluateLeaf(
-        ConditionLeaf leaf,
-        object fact,
-        IReadOnlyDictionary<string, IRuleFunction> functions,
-        TimeSpan regexTimeout)
+    private static bool EvaluateLeaf(ConditionLeaf leaf, object fact, EvaluationServices services)
     {
         object? fieldValue = leaf.Left is not null
-            ? ActionExpressionInterpreter.EvaluateValue(leaf.Left, fact)
+            ? ActionExpressionInterpreter.EvaluateValue(leaf.Left, fact, services)
             : leaf.Field is null ? fact : ResolvePath(fact, leaf.Field);
 
-        return ApplyOperator(leaf, fieldValue, functions, regexTimeout);
+        return ApplyOperator(leaf, fieldValue, services);
     }
 
     /// <summary>
@@ -122,18 +117,14 @@ internal static class RuleInterpreter
     /// interpreter and by the compiled path's computed-left-hand-side leaves, so a field
     /// leaf and an expression leaf with the same value compare identically.
     /// </summary>
-    internal static bool ApplyOperator(
-        ConditionLeaf leaf,
-        object? fieldValue,
-        IReadOnlyDictionary<string, IRuleFunction> functions,
-        TimeSpan regexTimeout)
+    internal static bool ApplyOperator(ConditionLeaf leaf, object? fieldValue, EvaluationServices services)
     {
         switch (leaf.Operator)
         {
             case ConditionOperator.Any:
             case ConditionOperator.All:
             case ConditionOperator.None:
-                return Quantify(leaf, fieldValue, functions, regexTimeout);
+                return Quantify(leaf, fieldValue, services);
 
             case ConditionOperator.IsNull:
                 return fieldValue is null;
@@ -142,7 +133,7 @@ internal static class RuleInterpreter
                 return fieldValue is not null;
 
             case ConditionOperator.Custom:
-                return functions[leaf.FunctionName!].Evaluate(fieldValue, leaf.Value);
+                return services.Functions[leaf.FunctionName!].Evaluate(fieldValue, leaf.Value);
 
             case ConditionOperator.Equal:
                 return RuntimeComparisons.AreEqual(fieldValue, leaf.Value);
@@ -174,7 +165,7 @@ internal static class RuleInterpreter
                     && endsText.EndsWith((string)leaf.Value!, StringComparison.Ordinal);
 
             case ConditionOperator.MatchesRegex:
-                return fieldValue is string regexText && GetRegex((string)leaf.Value!, regexTimeout).IsMatch(regexText);
+                return fieldValue is string regexText && GetRegex((string)leaf.Value!, services.RegexTimeout).IsMatch(regexText);
 
             case ConditionOperator.In:
                 return IsInSet(fieldValue, (object?[])leaf.Value!);
@@ -191,11 +182,7 @@ internal static class RuleInterpreter
     /// collection, so <c>All</c> and <c>None</c> are vacuously true over it. A string is text, not
     /// a collection of characters.
     /// </summary>
-    private static bool Quantify(
-        ConditionLeaf leaf,
-        object? collection,
-        IReadOnlyDictionary<string, IRuleFunction> functions,
-        TimeSpan regexTimeout)
+    private static bool Quantify(ConditionLeaf leaf, object? collection, EvaluationServices services)
     {
         if (collection is null or string || collection is not System.Collections.IEnumerable items)
         {
@@ -206,7 +193,7 @@ internal static class RuleInterpreter
         {
             // A null element still gets walked, so "$" comparisons and IsNull see it.
             bool matched = Evaluate(
-                leaf.ElementCondition!, 0, element!, functions, regexTimeout, results: null, layout: null);
+                leaf.ElementCondition!, 0, element!, services, results: null, layout: null);
 
             switch (leaf.Operator)
             {

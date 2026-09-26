@@ -1,0 +1,27 @@
+{
+  "name": "Custom actions",
+  "description": "An action whose 'type' names a handler registered in C# (RuleWrightBuilder.RegisterAction(\"setIfHigher\", ...)). The handler receives the action's target, its already-evaluated value, the fact, and read/write access to the running outputs - here it keeps the highest bid ever written. An unregistered type fails at load, exactly like a misspelled built-in.",
+  "rules": [
+    {
+      "id": "vip-bid",
+      "priority": 2,
+      "condition": { "field": "Customer.IsVip", "operator": "Equals", "value": true },
+      "actions": [
+        {
+          "type": "setIfHigher",
+          "target": "Bid",
+          "value": { "op": "multiply", "operands": [ { "field": "Order.Total" }, 0.1 ] }
+        }
+      ]
+    },
+    {
+      "id": "floor-bid",
+      "priority": 1,
+      "description": "Runs after vip-bid; its constant only wins when the computed bid was lower.",
+      "condition": { "field": "Order.Total", "operator": "GreaterThan", "value": 0 },
+      "actions": [
+        { "type": "setIfHigher", "target": "Bid", "value": 5 }
+      ]
+    }
+  ]
+}

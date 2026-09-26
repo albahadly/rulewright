@@ -133,6 +133,26 @@ public static class RuleHasher
 
                 builder.Append("]}");
                 break;
+
+            case CallExpression call:
+                // Two calls to differently-named functions must never share a compiled
+                // delegate; the implementation behind the name is per-engine, and so is the
+                // compiled-delegate cache, so name plus operands identifies the call.
+                builder.Append("{\"call\":");
+                AppendString(builder, call.Name);
+                builder.Append(",\"operands\":[");
+                for (int i = 0; i < call.Operands.Count; i++)
+                {
+                    if (i > 0)
+                    {
+                        builder.Append(',');
+                    }
+
+                    AppendExpression(builder, call.Operands[i]);
+                }
+
+                builder.Append("]}");
+                break;
         }
     }
 

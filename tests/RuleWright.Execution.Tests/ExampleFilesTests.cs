@@ -16,6 +16,30 @@ public class ExampleFilesTests
         .UseJsonReader(new SystemTextJsonReader())
         // Covers 12-custom-function.json (IsWeekend) and 18-builtin-functions.json.
         .RegisterBuiltInFunctions()
+        // Covers 23-value-functions.json.
+        .RegisterValueFunction("RoundTo", args =>
+            args.Length == 2 && args[0] is decimal value && args[1] is long digits
+                ? decimal.Round(value, (int)digits)
+                : null)
+        // Covers 25-custom-action.json: keeps the highest value ever written to the target.
+        .RegisterAction("setIfHigher", context =>
+        {
+            if (context.Value is not decimal incoming)
+            {
+                if (context.Value is not long incomingWhole)
+                {
+                    return;
+                }
+
+                incoming = incomingWhole;
+            }
+
+            context.TryGetOutput(context.Target, out object? current);
+            if (current is not decimal held || incoming > held)
+            {
+                context.SetOutput(context.Target, incoming);
+            }
+        })
         .Build();
 
     private static readonly string ExamplesDirectory = RepositoryPaths.Examples;

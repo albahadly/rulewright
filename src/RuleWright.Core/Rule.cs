@@ -20,6 +20,10 @@ public sealed class Rule
     /// <param name="priority">Higher-priority rules are evaluated first; ties keep document order.</param>
     /// <param name="enabled">Disabled rules are skipped entirely during evaluation.</param>
     /// <param name="elseActions">Actions applied when the condition does <em>not</em> pass; may be empty.</param>
+    /// <param name="failureMessage">
+    /// Optional authored explanation surfaced as a <see cref="RuleFailure"/> on the evaluation
+    /// result when the rule is evaluated and its condition does not pass.
+    /// </param>
     /// <exception cref="ArgumentException"><paramref name="id"/> is null or empty.</exception>
     /// <exception cref="ArgumentNullException"><paramref name="condition"/> is null, or <paramref name="actions"/>/<paramref name="elseActions"/> contains null.</exception>
     public Rule(
@@ -29,7 +33,8 @@ public sealed class Rule
         string? description = null,
         int priority = 0,
         bool enabled = true,
-        IEnumerable<RuleAction>? elseActions = null)
+        IEnumerable<RuleAction>? elseActions = null,
+        string? failureMessage = null)
     {
         if (string.IsNullOrEmpty(id))
         {
@@ -55,6 +60,10 @@ public sealed class Rule
         Priority = priority;
         Enabled = enabled;
         ElseActions = materializedElseActions;
+
+        // Normalized so an empty message means "no message": RuleFailure requires non-empty
+        // text, and evaluation must never throw over a decorative property.
+        FailureMessage = string.IsNullOrEmpty(failureMessage) ? null : failureMessage;
     }
 
     /// <summary>Unique identifier within the rule set.</summary>
@@ -80,4 +89,12 @@ public sealed class Rule
     /// rule has no <c>else</c> branch, in which case a non-matching rule contributes nothing.
     /// </summary>
     public IReadOnlyList<RuleAction> ElseActions { get; }
+
+    /// <summary>
+    /// Optional authored explanation surfaced as a <see cref="RuleFailure"/> on the evaluation
+    /// result when the rule is evaluated and its condition does not pass. Like
+    /// <see cref="Description"/>, it changes what the result reports, never what the rule
+    /// computes, so it plays no part in the rule's content hash.
+    /// </summary>
+    public string? FailureMessage { get; }
 }
