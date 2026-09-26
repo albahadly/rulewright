@@ -23,6 +23,7 @@
     <PackageTags>rules-engine;business-rules;json;expression-trees;decision-table;netstandard2.0</PackageTags>
     <PackageReleaseNotes>See https://github.com/albahadly/rulewright/releases for release notes.</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
@@ -64,6 +65,11 @@
       corporate feeds read, and the file is what a consumer unzipping the package finds.
     -->
     <None Include="$(MSBuildThisFileDirectory)..\LICENSE" Pack="true" PackagePath="\" Visible="false" />
+    <!--
+      The icon NuGet.org and the IDE package managers show. eng/icon.png is rendered from
+      eng/icon.svg at 256x256 (NuGet recommends at least 128x128); redraw the SVG, then re-render.
+    -->
+    <None Include="$(MSBuildThisFileDirectory)..\eng\icon.png" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 
 </Project>
