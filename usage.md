@@ -11,9 +11,12 @@ see [README.md](README.md) and [docs/architecture.md](docs/architecture.md).
 - [4. Actions: writing outputs](#4-actions-writing-outputs)
 - [5. Computed values](#5-computed-values)
 - [5a. Collections: Any, All, None, count](#5a-collections-any-all-none-count)
+- [5b. Scoped params: name a value once](#5b-scoped-params-name-a-value-once)
 - [6. Rule sets, priority, and else](#6-rule-sets-priority-and-else)
 - [7. Decision tables](#7-decision-tables)
 - [8. Custom functions](#8-custom-functions)
+- [8a. Value functions: call](#8a-value-functions-call)
+- [8b. Custom actions](#8b-custom-actions)
 - [9. Validating before you run](#9-validating-before-you-run)
 - [10. Tracing: why did this fire?](#10-tracing-why-did-this-fire)
 - [11. Building rules in C# instead of JSON](#11-building-rules-in-c-instead-of-json)
@@ -21,6 +24,7 @@ see [README.md](README.md) and [docs/architecture.md](docs/architecture.md).
 - [13. Discovering the vocabulary for a UI](#13-discovering-the-vocabulary-for-a-ui)
 - [14. Errors you may hit](#14-errors-you-may-hit)
 - [15. Behaviour worth knowing](#15-behaviour-worth-knowing)
+- [16. Coming from Microsoft RulesEngine](#16-coming-from-microsoft-rulesengine)
 
 ## Install
 
@@ -147,6 +151,18 @@ RuleEvaluationResult result = engine.Evaluate(rules, fact);
 > **Type the variable, not just the object.** `Evaluate` compiles against the *static* type, so
 > `object fact = new Checkout(...)` has no fields to bind and quietly falls back to the interpreter.
 > Declare it as `Checkout` (or use `var`) to get the compiled path.
+
+**Several inputs, no wrapper type?** `RuleFacts` evaluates named facts as one — each name is
+the first segment of a field path:
+
+```csharp
+RuleFacts facts = RuleFacts.With("customer", customer).And("order", order);
+RuleEvaluationResult result = engine.Evaluate(rules, facts);   // rules read customer.Age, order.Total
+```
+
+A `RuleFacts` is a dictionary fact, so it runs the interpreter (`CompilationMode.Interpreted`
+says so). The composite POCO above spells the same paths and gets the compiled path — pick
+per call site; the rules don't change.
 
 ## 3. Conditions
 
@@ -370,6 +386,39 @@ ConditionLeaf leaf = ConditionLeaf.Quantifier(
     new ConditionLeaf("Category", ConditionOperator.Equal, "alcohol"));
 ```
 
+## 5b. Scoped params: name a value once
+
+When the same computed value appears in several places, name it. `params` on a rule set
+declares **global** params every rule can reference; `params` on a rule declares **local**
+ones (shadowing a global with the same name). A reference is `{ "param": "<name>" }` and is
+valid anywhere an expression is — action values, a condition's `expression`, decision-table
+`then` cells:
+
+```json
+{
+  "params": {
+    "averageItem": { "op": "divide", "operands": [ { "field": "Order.Total" }, { "field": "Order.ItemCount" } ] }
+  },
+  "rules": [
+    { "id": "pricey",
+      "condition": { "expression": { "param": "averageItem" }, "operator": "GreaterThan", "value": 25 },
+      "actions": [ { "type": "setOutput", "target": "AverageItemPrice", "value": { "param": "averageItem" } } ] }
+  ]
+}
+```
+
+Params may reference sibling and outer params; a cycle is a validation error with a pointer.
+References are **inlined at load** — the domain model, the content hash, and both execution
+paths never see a param — so a param-authored document behaves (and caches) exactly like its
+hand-inlined twin. Two consequences worth knowing:
+
+- In C#, "a param" is simply a shared `ValueExpression` instance you reuse across rules.
+- A param cannot be referenced inside a quantifier's element `condition` — its definition
+  reads the *root* fact, while paths there resolve against the *element*. The validator
+  rejects it rather than letting it silently answer null.
+
+See [`examples/22-scoped-params.json`](examples/22-scoped-params.json).
+
 ## 6. Rule sets, priority, and else
 
 Several rules in one document:
@@ -396,6 +445,26 @@ Several rules in one document:
   `FiredRule.Branch` says which ran.
 - **`enabled: false`** — retires a rule without deleting it. It is skipped entirely.
 - **`description`** and **`layout`** — free-text and UI metadata; the engine ignores both.
+- **`failureMessage`** — the rule's authored explanation for saying no. When the rule is
+  evaluated and its condition does not pass, the message lands on `result.Failures`
+  (rule id + message). Skipped rules — disabled, or unreached after a stop-on-first-match —
+  report nothing: a message means the rule was actually asked. See
+  [`examples/24-failure-messages.json`](examples/24-failure-messages.json).
+
+  ```csharp
+  foreach (RuleFailure failure in result.Failures)
+      Console.WriteLine($"{failure.RuleId}: {failure.Message}");
+  ```
+
+Composing several documents into one evaluation is a load-time, C# concern — documents stay
+self-contained, with no include mechanism:
+
+```csharp
+RuleSet combined = RuleSet.Merge(
+    new[] { baseline.RuleSet, seasonal.RuleSet }, name: "combined");
+LoadedRuleSet rules = engine.LoadRuleSet(combined);   // duplicate rule ids fail loudly here
+```
+
 
 Stop after the first match — the caller's choice, for one evaluation:
 
@@ -515,6 +584,76 @@ For a testable clock, build the catalog yourself:
 ```csharp
 var functions = BuiltInFunctions.Create(() => new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
 ```
+
+## 8a. Value functions: call
+
+A `custom` function answers yes or no. A **value function** computes a value, and a
+`{ "call": ... }` node invokes it anywhere an expression is valid — action values, computed
+left-hand sides, decision-table cells — composing freely with the built-in operators:
+
+```csharp
+var engine = new RuleWrightBuilder()
+    .UseJsonReader(new SystemTextJsonReader())
+    .RegisterValueFunction("RoundTo", args =>
+        args is [decimal value, long digits] ? decimal.Round(value, (int)digits) : null)
+    .Build();
+```
+
+```json
+{ "type": "setOutput", "target": "Discount",
+  "value": { "call": "RoundTo",
+             "operands": [ { "op": "multiply", "operands": [ { "field": "Order.Total" }, 0.1 ] }, 2 ] } }
+```
+
+The delegate receives the evaluated operands in document order (`operands` may be omitted for
+a no-argument call). Like `custom` functions, calls are bound at **compile time**: an
+unregistered name fails at `LoadRuleSet`, and a function that implements
+`IRuleValueFunctionMetadata` with a `RequiredOperandCount` gets its calls arity-checked at
+load too. Implementations must be thread-safe, and should be **total** like the built-in
+operators — return null for an argument shape you don't understand rather than throwing.
+`engine.ValueFunctionCatalog` lists what's registered, for UIs.
+
+See [`examples/23-value-functions.json`](examples/23-value-functions.json).
+
+## 8b. Custom actions
+
+When the four built-in action types don't cover how a value should combine into the outputs,
+register an action type. The document names it; the behaviour is your handler:
+
+```csharp
+var engine = new RuleWrightBuilder()
+    .UseJsonReader(new SystemTextJsonReader())
+    .RegisterAction("setIfHigher", context =>
+    {
+        context.TryGetOutput(context.Target, out object? current);
+        if (context.Value is decimal bid && (current is not decimal held || bid > held))
+        {
+            context.SetOutput(context.Target, bid);
+        }
+    })
+    .Build();
+```
+
+```json
+{ "type": "setIfHigher", "target": "Bid",
+  "value": { "op": "multiply", "operands": [ { "field": "Order.Total" }, 0.1 ] } }
+```
+
+The `RuleActionContext` carries the firing rule's id and branch, the `target`, the
+already-evaluated `value` (optional in the JSON for a custom type — the handler then sees
+null), the fact, and `TryGetOutput`/`SetOutput`/`RemoveOutput` over the running outputs.
+Writes land in the merged `result.Outputs` *and* the firing rule's own `FiredRule.Outputs`
+snapshot, exactly as the built-in types record theirs — and both execution paths dispatch
+through the same handler instance.
+
+An unregistered type is still an error: at `LoadRuleSet` for hand-built rule sets, and at
+validation for JSON — `engine.Validate` folds the engine's registered names into the closed
+vocabulary, so a misspelled `"setOutputt"` is caught and the error message lists the
+registered custom types alongside the built-ins. Handlers must be thread-safe, and should
+confine themselves to the context's outputs: evaluation stays a pure fact-in, result-out
+computation.
+
+See [`examples/25-custom-action.json`](examples/25-custom-action.json).
 
 ## 9. Validating before you run
 
@@ -735,8 +874,36 @@ other rules' conditions — there is no forward chaining, by design.
 **Native AOT.** Compiled delegates use `System.Linq.Expressions`, which AOT cannot support. Under
 NativeAOT use dictionary facts; `CompilationMode.Interpreted` confirms which path ran.
 
+## 16. Coming from Microsoft RulesEngine
+
+Every RulesEngine concept has a RuleWright form. The redesign is always the same move:
+anything that is *code* moves out of the JSON and into a registration on the builder, and the
+document only names it — so rules stay pure data a UI can generate and a reviewer can diff.
+
+| You used | Reach for | Where |
+|---|---|---|
+| Lambda expression strings | The expression vocabulary + `{ "call": … }` value functions | [§5](#5-computed-values), [§8a](#8a-value-functions-call) |
+| `RuleParameter[]` named inputs | `RuleFacts.With(...).And(...)`, or a composite POCO | [§2](#2-facts-typed-or-dynamic) |
+| `GlobalParams` / `LocalParams` | `params` + `{ "param": "…" }` | [§5b](#5b-scoped-params-name-a-value-once) |
+| `ReSettings.CustomTypes` | `RegisterFunction` / `RegisterValueFunction` | [§8](#8-custom-functions), [§8a](#8a-value-functions-call) |
+| Custom actions / `OutputExpression` | `RegisterAction` / computed action values | [§8b](#8b-custom-actions), [§5](#5-computed-values) |
+| `ErrorMessage` | `failureMessage` → `result.Failures` | [§6](#6-rule-sets-priority-and-else) |
+| `SuccessEvent`, `OnSuccess`/`OnFail` | Read `result.FiredRules` / `result.Outputs` | [§1](#1-your-first-rule) |
+| `WorkflowsToInject` | `RuleSet.Merge(...)` | [§6](#6-rule-sets-priority-and-else) |
+| `RuleResultTree` | `FiredRules` + `Trace` + `Failures` | [§10](#10-tracing-why-did-this-fire) |
+
+Two things are deliberately **not** imported. Free-form expression strings would put
+arbitrary code back into rule files — rejecting that is RuleWright's founding decision. And
+`EvaluateRule`-style chaining (rule outputs feeding other rules) stays out with forward
+chaining generally: evaluation is stateless and single-pass by design.
+
+There is no async API either: evaluation is a pure, allocation-light CPU computation with no
+I/O to await, so `Evaluate` is synchronous and thread-safe — wrap it in `Task.Run` if a
+calling convention demands a `Task`. Custom functions and actions are synchronous for the
+same reason; a rule evaluation should not be doing I/O.
+
 ---
 
-Runnable versions of most of the above live in [`examples/`](examples/) (21 documents, each
+Runnable versions of most of the above live in [`examples/`](examples/) (25 documents, each
 validated by the test suite) and [`samples/`](samples/) (console, ASP.NET Core, decision tables,
 custom functions, .NET Framework 4.8, and the Blazor editor).

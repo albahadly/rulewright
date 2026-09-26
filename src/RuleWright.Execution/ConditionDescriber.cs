@@ -60,6 +60,8 @@ internal static class ConditionDescriber
         FieldExpression field => field.Path,
         OperatorExpression op => ExpressionOperatorName(op.Operator)
             + "(" + string.Join(", ", op.Operands.Select(Describe)) + ")",
+        CallExpression call => "call:" + call.Name
+            + "(" + string.Join(", ", call.Operands.Select(Describe)) + ")",
         _ => "(expression)",
     };
 

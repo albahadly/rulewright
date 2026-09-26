@@ -124,6 +124,10 @@
       <div class="palette-badge">ƒx</div>
       <div class="palette-label">Expression</div>
     </div>
+    <div class="palette-item" draggable="true" data-type="valCall" style="--item-color:var(--accent-purple)">
+      <div class="palette-badge">ƒ()</div>
+      <div class="palette-label">Function Call</div>
+    </div>
 
     <div class="palette-hint" style="margin-top:16px;border-top:1px solid var(--border-soft);padding-top:14px;">
       Each <strong>Rule</strong> node is one rule: wire a condition into its <strong>Condition</strong> pin, and one or more
@@ -233,7 +237,16 @@
         if (firstRender)
         {
             _selfRef = DotNetObjectReference.Create(this);
-            await JsInterop.InvokeVoidAsync("rulewrightFlowBuilder.init", _selfRef);
+
+            // The canvas's fixed vocabulary lives in its own literal arrays (held against
+            // RuleSchemaCatalog by tests); the parts that vary per engine — registered custom
+            // action types and value functions — are handed over here so its pickers offer
+            // exactly what this engine accepts.
+            await JsInterop.InvokeVoidAsync("rulewrightFlowBuilder.init", _selfRef, new
+            {
+                customActions = EngineService.Engine.RegisteredActions,
+                valueFunctions = EngineService.Engine.RegisteredValueFunctions,
+            });
         }
     }
 
@@ -246,7 +259,10 @@
         try
         {
             RuleJsonValue document = EngineService.JsonReader.Read(ruleJson);
-            RuleSetValidationResult result = RuleSetValidator.Validate(document);
+
+            // The engine's options, so a document naming a registered custom action validates
+            // here exactly as Engine.Validate would accept it.
+            RuleSetValidationResult result = RuleSetValidator.Validate(document, EngineService.DocumentOptions);
             var payload = new
             {
                 valid = result.IsValid,
@@ -322,9 +338,10 @@
 
     /// <summary>
     /// Normalizes ANY rule document — a single rule, a rule set, or a <c>decisionTable</c> — into a
-    /// plain <c>{ name, rules[] }</c> set the canvas can rebuild. Decision tables are expanded by the
-    /// REAL engine (<see cref="RuleSetParser.Parse"/> runs the same table→rules expansion the engine
-    /// evaluates), so the canvas shows exactly what would run rather than a JS re-implementation.
+    /// plain <c>{ name, rules[] }</c> set the canvas can rebuild. Decision tables are expanded and
+    /// scoped <c>params</c> are inlined by the REAL engine (<see cref="RuleSetParser.Parse"/> runs
+    /// the same expansion and substitution the engine evaluates), so the canvas shows exactly what
+    /// would run rather than a JS re-implementation.
     /// </summary>
     [JSInvokable]
     public string ExpandDocument(string json)
@@ -332,7 +349,7 @@
         try
         {
             RuleJsonValue document = EngineService.JsonReader.Read(json);
-            RuleSet ruleSet = RuleSetParser.Parse(document);
+            RuleSet ruleSet = RuleSetParser.Parse(document, EngineService.DocumentOptions);
             var rules = ruleSet.Rules.Select(RuleToJson).ToArray();
             return JsonSerializer.Serialize(new
             {
@@ -357,6 +374,7 @@
         if (!string.IsNullOrEmpty(r.Description)) o["description"] = r.Description;
         o["priority"] = r.Priority;
         o["enabled"] = r.Enabled;
+        if (r.FailureMessage is not null) o["failureMessage"] = r.FailureMessage;
         o["condition"] = ConditionToJson(r.Condition);
         o["actions"] = r.Actions.Select(ActionToJson).ToArray();
         if (r.ElseActions.Count > 0) o["else"] = r.ElseActions.Select(ActionToJson).ToArray();
@@ -418,6 +436,11 @@
         {
             ["op"] = op.Operator.ToString().ToLowerInvariant(),
             ["operands"] = op.Operands.Select(ExpressionToJson).ToArray(),
+        },
+        CallExpression call => new Dictionary<string, object?>
+        {
+            ["call"] = call.Name,
+            ["operands"] = call.Operands.Select(ExpressionToJson).ToArray(),
         },
         _ => null,
     };

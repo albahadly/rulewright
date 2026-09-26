@@ -12,20 +12,40 @@ namespace RuleWright.Serialization;
 public static class RuleSetParser
 {
     /// <summary>
-    /// Validates and parses a rule document (a single rule or a rule set).
+    /// Validates and parses a rule document (a single rule or a rule set), against the
+    /// built-in vocabulary only.
     /// </summary>
     /// <param name="document">The document root.</param>
     /// <returns>The parsed rule set; a single-rule document becomes a one-rule set.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="document"/> is null.</exception>
     /// <exception cref="RuleValidationException">The document fails structural validation.</exception>
     public static RuleSet Parse(RuleJsonValue document)
+        => Parse(document, null);
+
+    /// <summary>
+    /// Validates and parses a rule document, folding an engine's registered vocabulary
+    /// (custom action types) into the schema contract.
+    ///
+    /// <para>Parsing is also where <c>params</c> disappear: a param is a named subexpression,
+    /// and every <c>{ "param": "..." }</c> reference is replaced by the (immutable, shared)
+    /// expression it names — local names shadowing the set's. The domain model, the content
+    /// hash, and both execution paths therefore never see params at all, which is exactly why
+    /// a param-authored document and its hand-inlined equivalent compile to the same
+    /// delegates.</para>
+    /// </summary>
+    /// <param name="document">The document root.</param>
+    /// <param name="options">The engine-registered vocabulary, or null for the built-ins only.</param>
+    /// <returns>The parsed rule set; a single-rule document becomes a one-rule set.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="document"/> is null.</exception>
+    /// <exception cref="RuleValidationException">The document fails structural validation.</exception>
+    public static RuleSet Parse(RuleJsonValue document, RuleDocumentOptions? options)
     {
         if (document is null)
         {
             throw new ArgumentNullException(nameof(document));
         }
 
-        RuleSetValidationResult validation = RuleSetValidator.Validate(document);
+        RuleSetValidationResult validation = RuleSetValidator.Validate(document, options);
         if (!validation.IsValid)
         {
             throw new RuleValidationException(validation.Errors);
@@ -48,25 +68,32 @@ public static class RuleSetParser
                 document.TryGetProperty("stopAfterFirstMatch", out RuleJsonValue stopValue)
                 && stopValue.Kind == RuleJsonValueKind.True;
 
+            ParamScope? globalParams = ParamScope.Create(document, parent: null);
             var parsed = new List<Rule>(rules.Items.Count);
             foreach (RuleJsonValue rule in rules.Items)
             {
-                parsed.Add(ParseRule(rule));
+                parsed.Add(ParseRule(rule, globalParams));
             }
 
             return new RuleSet(parsed, name, stopAfterFirstMatch);
         }
 
-        return new RuleSet(new[] { ParseRule(document) });
+        return new RuleSet(new[] { ParseRule(document, outerParams: null) });
     }
 
-    private static Rule ParseRule(RuleJsonValue rule)
+    private static Rule ParseRule(RuleJsonValue rule, ParamScope? outerParams)
     {
+        ParamScope? paramScope = ParamScope.Create(rule, outerParams);
+
         rule.TryGetProperty("id", out RuleJsonValue id);
         rule.TryGetProperty("condition", out RuleJsonValue condition);
 
         string? description = rule.TryGetProperty("description", out RuleJsonValue descriptionValue)
             ? descriptionValue.GetString()
+            : null;
+
+        string? failureMessage = rule.TryGetProperty("failureMessage", out RuleJsonValue failureMessageValue)
+            ? failureMessageValue.GetString()
             : null;
 
         int priority = 0;
@@ -80,24 +107,25 @@ public static class RuleSetParser
             || enabledValue.Kind == RuleJsonValueKind.True;
 
         List<RuleAction>? actions = rule.TryGetProperty("actions", out RuleJsonValue actionsValue)
-            ? ParseActions(actionsValue)
+            ? ParseActions(actionsValue, paramScope)
             : null;
 
         List<RuleAction>? elseActions = rule.TryGetProperty("else", out RuleJsonValue elseValue)
-            ? ParseActions(elseValue)
+            ? ParseActions(elseValue, paramScope)
             : null;
 
         return new Rule(
             id.GetString(),
-            ParseCondition(condition),
+            ParseCondition(condition, paramScope),
             actions,
             description,
             priority,
             enabled,
-            elseActions);
+            elseActions,
+            failureMessage);
     }
 
-    private static List<RuleAction> ParseActions(RuleJsonValue actionsValue)
+    private static List<RuleAction> ParseActions(RuleJsonValue actionsValue, ParamScope? paramScope)
     {
         var actions = new List<RuleAction>(actionsValue.Items.Count);
         foreach (RuleJsonValue action in actionsValue.Items)
@@ -112,8 +140,14 @@ public static class RuleSetParser
                 continue;
             }
 
-            action.TryGetProperty("value", out RuleJsonValue value);
-            actions.Add(new RuleAction(type.GetString(), target.GetString(), ParseValueExpression(value)));
+            // A registered custom action may omit its value; the handler then sees null.
+            if (!action.TryGetProperty("value", out RuleJsonValue value))
+            {
+                actions.Add(new RuleAction(type.GetString(), target.GetString(), (object?)null));
+                continue;
+            }
+
+            actions.Add(new RuleAction(type.GetString(), target.GetString(), ParseValueExpression(value, paramScope)));
         }
 
         return actions;
@@ -139,6 +173,7 @@ public static class RuleSetParser
             && hitPolicy.Kind == RuleJsonValueKind.String
             && hitPolicy.GetString() == "first";
 
+        ParamScope? paramScope = ParamScope.Create(table, parent: null);
         table.TryGetProperty("inputs", out RuleJsonValue inputs);
         table.TryGetProperty("outputs", out RuleJsonValue outputs);
         table.TryGetProperty("rows", out RuleJsonValue rows);
@@ -203,7 +238,7 @@ public static class RuleSetParser
                     continue; // this row does not write this output
                 }
 
-                actions.Add(new RuleAction(types[c], targets[c], ParseValueExpression(cell)));
+                actions.Add(new RuleAction(types[c], targets[c], ParseValueExpression(cell, paramScope)));
             }
 
             string id = idBase + "-" + r.ToString(CultureInfo.InvariantCulture);
@@ -245,7 +280,7 @@ public static class RuleSetParser
                 new ConditionLeaf(field, ConditionOperator.IsNull, null),
             });
 
-    private static ValueExpression ParseValueExpression(RuleJsonValue node)
+    private static ValueExpression ParseValueExpression(RuleJsonValue node, ParamScope? paramScope)
     {
         if (node.Kind == RuleJsonValueKind.Object)
         {
@@ -256,10 +291,32 @@ public static class RuleSetParser
                 var parsedOperands = new List<ValueExpression>(operands.Items.Count);
                 foreach (RuleJsonValue operand in operands.Items)
                 {
-                    parsedOperands.Add(ParseValueExpression(operand));
+                    parsedOperands.Add(ParseValueExpression(operand, paramScope));
                 }
 
                 return new OperatorExpression(@operator, parsedOperands);
+            }
+
+            if (node.TryGetProperty("call", out RuleJsonValue call))
+            {
+                var arguments = new List<ValueExpression>();
+                if (node.TryGetProperty("operands", out RuleJsonValue callOperands))
+                {
+                    foreach (RuleJsonValue operand in callOperands.Items)
+                    {
+                        arguments.Add(ParseValueExpression(operand, paramScope));
+                    }
+                }
+
+                return new CallExpression(call.GetString(), arguments);
+            }
+
+            if (node.TryGetProperty("param", out RuleJsonValue param))
+            {
+                // Substitution point: the reference becomes the named (immutable, shared)
+                // expression itself. Validation has already guaranteed the name resolves
+                // and that definitions are acyclic.
+                return paramScope!.Resolve(param.GetString());
             }
 
             if (node.TryGetProperty("field", out RuleJsonValue field))
@@ -276,7 +333,7 @@ public static class RuleSetParser
         return new LiteralExpression(node.ToClrValue());
     }
 
-    private static ConditionNode ParseCondition(RuleJsonValue condition)
+    private static ConditionNode ParseCondition(RuleJsonValue condition, ParamScope? paramScope)
     {
         if (condition.TryGetProperty("type", out _))
         {
@@ -292,7 +349,7 @@ public static class RuleSetParser
             var parsedChildren = new List<ConditionNode>(children.Items.Count);
             foreach (RuleJsonValue child in children.Items)
             {
-                parsedChildren.Add(ParseCondition(child));
+                parsedChildren.Add(ParseCondition(child, paramScope));
             }
 
             return new ConditionGroup(logical, parsedChildren);
@@ -312,8 +369,10 @@ public static class RuleSetParser
         // A quantifier reads a collection from 'field' and applies a nested condition per element.
         if (ConditionLeaf.IsQuantifier(@operator))
         {
+            // Params are not referenceable inside the element condition (validation rejects
+            // them), so the scope passed on is never consulted there.
             condition.TryGetProperty("condition", out RuleJsonValue elementCondition);
-            return ConditionLeaf.Quantifier(field!, @operator, ParseCondition(elementCondition));
+            return ConditionLeaf.Quantifier(field!, @operator, ParseCondition(elementCondition, paramScope));
         }
 
         object? value = null;
@@ -324,9 +383,62 @@ public static class RuleSetParser
 
         if (condition.TryGetProperty("expression", out RuleJsonValue leftExpression))
         {
-            return new ConditionLeaf(ParseValueExpression(leftExpression), @operator, value);
+            return new ConditionLeaf(ParseValueExpression(leftExpression, paramScope), @operator, value);
         }
 
         return new ConditionLeaf(field, @operator, value, functionName);
+    }
+
+    /// <summary>
+    /// One level of <c>params</c> during parsing: the container's own definitions plus the
+    /// enclosing level (a rule's params over the set's). <see cref="Resolve"/> parses a
+    /// definition on first reference — own names first, so a local shadows a global — and
+    /// memoizes the result, so every reference to a param shares one immutable expression
+    /// instance. Validation has already established that every reference resolves and that
+    /// definitions are acyclic, which is what makes this recursion terminate.
+    /// </summary>
+    private sealed class ParamScope
+    {
+        private readonly ParamScope? _parent;
+        private readonly Dictionary<string, RuleJsonValue> _definitions;
+        private readonly Dictionary<string, ValueExpression> _resolved =
+            new Dictionary<string, ValueExpression>(StringComparer.Ordinal);
+
+        private ParamScope(RuleJsonValue paramsValue, ParamScope? parent)
+        {
+            _parent = parent;
+            _definitions = new Dictionary<string, RuleJsonValue>(StringComparer.Ordinal);
+            foreach (KeyValuePair<string, RuleJsonValue> definition in paramsValue.Properties)
+            {
+                _definitions[definition.Key] = definition.Value;
+            }
+        }
+
+        /// <summary>
+        /// The scope for a container: a new level when it declares <c>params</c>, otherwise
+        /// the enclosing scope unchanged (null when there is none anywhere).
+        /// </summary>
+        internal static ParamScope? Create(RuleJsonValue container, ParamScope? parent)
+            => container.TryGetProperty("params", out RuleJsonValue paramsValue)
+                && paramsValue.Kind == RuleJsonValueKind.Object
+                ? new ParamScope(paramsValue, parent)
+                : parent;
+
+        internal ValueExpression Resolve(string name)
+        {
+            if (_resolved.TryGetValue(name, out ValueExpression? expression))
+            {
+                return expression;
+            }
+
+            if (_definitions.TryGetValue(name, out RuleJsonValue? definition))
+            {
+                ValueExpression parsed = ParseValueExpression(definition, this);
+                _resolved[name] = parsed;
+                return parsed;
+            }
+
+            return _parent!.Resolve(name);
+        }
     }
 }

@@ -1,0 +1,51 @@
+{
+  "name": "Scoped params",
+  "description": "Params are named subexpressions: define once in the set's (global) or a rule's (local) 'params', reference anywhere in that scope as { \"param\": \"name\" }. A local name shadows a global one. References are inlined at load, so params never change what a rule computes - only how it reads.",
+  "params": {
+    "averageItem": {
+      "op": "divide",
+      "operands": [ { "field": "Order.Total" }, { "field": "Order.ItemCount" } ]
+    },
+    "rate": 0.1
+  },
+  "rules": [
+    {
+      "id": "pricey-basket",
+      "description": "The global 'averageItem' param used as a condition's computed left-hand side.",
+      "condition": {
+        "expression": { "param": "averageItem" },
+        "operator": "GreaterThan",
+        "value": 25
+      },
+      "actions": [
+        { "type": "setOutput", "target": "PriceyBasket", "value": true },
+        { "type": "setOutput", "target": "AverageItemPrice", "value": { "param": "averageItem" } }
+      ]
+    },
+    {
+      "id": "standard-discount",
+      "description": "The global 'rate' param inside a computed action value.",
+      "condition": { "field": "Order.Total", "operator": "GreaterThanOrEqual", "value": 100 },
+      "actions": [
+        {
+          "type": "setOutput",
+          "target": "Discount",
+          "value": { "op": "multiply", "operands": [ { "field": "Order.Total" }, { "param": "rate" } ] }
+        }
+      ]
+    },
+    {
+      "id": "vip-discount",
+      "description": "A local 'rate' shadows the global one for this rule only.",
+      "params": { "rate": 0.2 },
+      "condition": { "field": "Customer.IsVip", "operator": "Equals", "value": true },
+      "actions": [
+        {
+          "type": "setOutput",
+          "target": "VipDiscount",
+          "value": { "op": "multiply", "operands": [ { "field": "Order.Total" }, { "param": "rate" } ] }
+        }
+      ]
+    }
+  ]
+}

@@ -82,5 +82,21 @@
   {
     "file": "21-stop-after-first-match.json",
     "description": "stopAfterFirstMatch: the document itself stops evaluation at the first rule that passes, without the caller asking for it."
+  },
+  {
+    "file": "22-scoped-params.json",
+    "description": "Scoped params: named subexpressions defined once ('params') and referenced as { \"param\": ... }; a rule's params shadow the set's. The canvas loads this through the real parser, which inlines every reference - exactly what the engine runs."
+  },
+  {
+    "file": "23-value-functions.json",
+    "description": "{ \"call\": ... } invokes a value function registered in C# (RegisterValueFunction) - a Function Call node on the canvas. This app registers RoundTo."
+  },
+  {
+    "file": "24-failure-messages.json",
+    "description": "failureMessage: a rule's authored explanation for saying no, surfaced on the result's Failures list. Editable on the Rule node."
+  },
+  {
+    "file": "25-custom-action.json",
+    "description": "A custom action type registered in C# (RegisterAction) keeps the highest bid written. This app registers setIfHigher, so the Action node's type picker offers it."
   }
 ]

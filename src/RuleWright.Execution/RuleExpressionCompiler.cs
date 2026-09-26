@@ -19,6 +19,9 @@ internal static class RuleExpressionCompiler
     private static readonly MethodInfo FunctionEvaluateMethod =
         typeof(IRuleFunction).GetMethod(nameof(IRuleFunction.Evaluate))!;
 
+    private static readonly MethodInfo ValueFunctionInvokeMethod =
+        typeof(IRuleValueFunction).GetMethod(nameof(IRuleValueFunction.Invoke))!;
+
     private static readonly MethodInfo StringContainsMethod =
         typeof(string).GetMethod(nameof(string.Contains), new[] { typeof(string) })!;
 
@@ -54,24 +57,23 @@ internal static class RuleExpressionCompiler
 
     internal static CompiledRule<TFact> Compile<TFact>(
         Rule rule,
-        IReadOnlyDictionary<string, IRuleFunction> functions,
-        TimeSpan regexTimeout,
+        EvaluationServices services,
         int[] nodeLayout)
     {
         ParameterExpression fact = Expression.Parameter(typeof(TFact), "fact");
         ParameterExpression results = Expression.Parameter(typeof(bool?[]), "results");
 
-        var fastContext = new Context(rule, functions, regexTimeout, null, nodeLayout);
+        var fastContext = new Context(rule, services, null, nodeLayout);
         Expression fastBody = BuildNode(rule.Condition, 0, fact, fastContext);
         Func<TFact, bool> predicate = Expression.Lambda<Func<TFact, bool>>(fastBody, fact).Compile();
 
-        var tracedContext = new Context(rule, functions, regexTimeout, results, nodeLayout);
+        var tracedContext = new Context(rule, services, results, nodeLayout);
         Expression tracedBody = BuildNode(rule.Condition, 0, fact, tracedContext);
         Func<TFact, bool?[], bool> tracedPredicate =
             Expression.Lambda<Func<TFact, bool?[], bool>>(tracedBody, fact, results).Compile();
 
-        OutputStep<TFact>[]? outputSteps = CompileOutputs<TFact>(rule, rule.Actions);
-        OutputStep<TFact>[]? elseOutputSteps = CompileOutputs<TFact>(rule, rule.ElseActions);
+        OutputStep<TFact>[]? outputSteps = CompileOutputs<TFact>(rule, rule.Actions, services);
+        OutputStep<TFact>[]? elseOutputSteps = CompileOutputs<TFact>(rule, rule.ElseActions, services);
 
         return new CompiledRule<TFact>(predicate, tracedPredicate, outputSteps, elseOutputSteps);
     }
@@ -83,7 +85,8 @@ internal static class RuleExpressionCompiler
     /// references inside value expressions are validated against <typeparamref name="TFact"/>
     /// at compile time, exactly like condition fields.
     /// </summary>
-    private static OutputStep<TFact>[]? CompileOutputs<TFact>(Rule rule, IReadOnlyList<RuleAction> actions)
+    private static OutputStep<TFact>[]? CompileOutputs<TFact>(
+        Rule rule, IReadOnlyList<RuleAction> actions, EvaluationServices services)
     {
         bool anyComplex = false;
         for (int i = 0; i < actions.Count; i++)
@@ -114,7 +117,7 @@ internal static class RuleExpressionCompiler
             }
             else
             {
-                Expression body = BuildValueExpression(action.Value, fact, rule);
+                Expression body = BuildValueExpression(action.Value, fact, rule, services);
                 valueFactory = Expression.Lambda<Func<TFact, object?>>(body, fact).Compile();
             }
 
@@ -124,7 +127,8 @@ internal static class RuleExpressionCompiler
         return steps;
     }
 
-    private static Expression BuildValueExpression(ValueExpression expression, ParameterExpression fact, Rule rule)
+    private static Expression BuildValueExpression(
+        ValueExpression expression, ParameterExpression fact, Rule rule, EvaluationServices services)
     {
         switch (expression)
         {
@@ -135,52 +139,83 @@ internal static class RuleExpressionCompiler
                 return NavigateValue(fact, field.Path.Split('.'), 0, isRoot: true, field.Path, rule);
 
             case OperatorExpression op:
-                return BuildOperatorExpression(op, fact, rule);
+                return BuildOperatorExpression(op, fact, rule, services);
+
+            case CallExpression call:
+                return BuildCallExpression(call, fact, rule, services);
 
             default:
                 return NullObject;
         }
     }
 
-    private static Expression BuildOperatorExpression(OperatorExpression op, ParameterExpression fact, Rule rule)
+    /// <summary>
+    /// Binds a <c>call</c> node to its registered <see cref="IRuleValueFunction"/> instance at
+    /// compile time — the delegate holds the function directly, so evaluations pay one virtual
+    /// call and no name lookup, exactly like a compiled <c>custom</c> condition.
+    /// </summary>
+    private static Expression BuildCallExpression(
+        CallExpression call, ParameterExpression fact, Rule rule, EvaluationServices services)
+    {
+        if (!services.ValueFunctions.TryGetValue(call.Name, out IRuleValueFunction? function))
+        {
+            throw new RuleCompilationException(
+                rule.Id,
+                $"value function '{call.Name}' is not registered.");
+        }
+
+        var arguments = new Expression[call.Operands.Count];
+        for (int i = 0; i < call.Operands.Count; i++)
+        {
+            arguments[i] = BuildValueExpression(call.Operands[i], fact, rule, services);
+        }
+
+        return Expression.Call(
+            Expression.Constant(function, typeof(IRuleValueFunction)),
+            ValueFunctionInvokeMethod,
+            Expression.NewArrayInit(typeof(object), arguments));
+    }
+
+    private static Expression BuildOperatorExpression(
+        OperatorExpression op, ParameterExpression fact, Rule rule, EvaluationServices services)
     {
         switch (op.Operator)
         {
             case ExpressionOperator.Add:
-                return Fold(op.Operands, fact, rule, AddMethod);
+                return Fold(op.Operands, fact, rule, services, AddMethod);
 
             case ExpressionOperator.Multiply:
-                return Fold(op.Operands, fact, rule, MultiplyMethod);
+                return Fold(op.Operands, fact, rule, services, MultiplyMethod);
 
             case ExpressionOperator.Subtract:
                 return Expression.Call(
                     SubtractMethod,
-                    BuildValueExpression(op.Operands[0], fact, rule),
-                    BuildValueExpression(op.Operands[1], fact, rule));
+                    BuildValueExpression(op.Operands[0], fact, rule, services),
+                    BuildValueExpression(op.Operands[1], fact, rule, services));
 
             case ExpressionOperator.Divide:
                 return Expression.Call(
                     DivideMethod,
-                    BuildValueExpression(op.Operands[0], fact, rule),
-                    BuildValueExpression(op.Operands[1], fact, rule));
+                    BuildValueExpression(op.Operands[0], fact, rule, services),
+                    BuildValueExpression(op.Operands[1], fact, rule, services));
 
             case ExpressionOperator.Modulo:
                 return Expression.Call(
                     ModuloMethod,
-                    BuildValueExpression(op.Operands[0], fact, rule),
-                    BuildValueExpression(op.Operands[1], fact, rule));
+                    BuildValueExpression(op.Operands[0], fact, rule, services),
+                    BuildValueExpression(op.Operands[1], fact, rule, services));
 
             case ExpressionOperator.Negate:
-                return Expression.Call(NegateMethod, BuildValueExpression(op.Operands[0], fact, rule));
+                return Expression.Call(NegateMethod, BuildValueExpression(op.Operands[0], fact, rule, services));
 
             case ExpressionOperator.Count:
-                return Expression.Call(CountMethod, BuildValueExpression(op.Operands[0], fact, rule));
+                return Expression.Call(CountMethod, BuildValueExpression(op.Operands[0], fact, rule, services));
 
             case ExpressionOperator.Concat:
-                return Expression.Call(ConcatMethod, OperandArray(op.Operands, fact, rule));
+                return Expression.Call(ConcatMethod, OperandArray(op.Operands, fact, rule, services));
 
             default: // Coalesce
-                return Expression.Call(CoalesceMethod, OperandArray(op.Operands, fact, rule));
+                return Expression.Call(CoalesceMethod, OperandArray(op.Operands, fact, rule, services));
         }
     }
 
@@ -188,23 +223,25 @@ internal static class RuleExpressionCompiler
         IReadOnlyList<ValueExpression> operands,
         ParameterExpression fact,
         Rule rule,
+        EvaluationServices services,
         MethodInfo binaryOp)
     {
-        Expression accumulator = BuildValueExpression(operands[0], fact, rule);
+        Expression accumulator = BuildValueExpression(operands[0], fact, rule, services);
         for (int i = 1; i < operands.Count; i++)
         {
-            accumulator = Expression.Call(binaryOp, accumulator, BuildValueExpression(operands[i], fact, rule));
+            accumulator = Expression.Call(binaryOp, accumulator, BuildValueExpression(operands[i], fact, rule, services));
         }
 
         return accumulator;
     }
 
-    private static Expression OperandArray(IReadOnlyList<ValueExpression> operands, ParameterExpression fact, Rule rule)
+    private static Expression OperandArray(
+        IReadOnlyList<ValueExpression> operands, ParameterExpression fact, Rule rule, EvaluationServices services)
     {
         var items = new Expression[operands.Count];
         for (int i = 0; i < operands.Count; i++)
         {
-            items[i] = BuildValueExpression(operands[i], fact, rule);
+            items[i] = BuildValueExpression(operands[i], fact, rule, services);
         }
 
         return Expression.NewArrayInit(typeof(object), items);
@@ -289,23 +326,19 @@ internal static class RuleExpressionCompiler
     {
         internal Context(
             Rule rule,
-            IReadOnlyDictionary<string, IRuleFunction> functions,
-            TimeSpan regexTimeout,
+            EvaluationServices services,
             ParameterExpression? results,
             int[]? nodeLayout)
         {
             Rule = rule;
-            Functions = functions;
-            RegexTimeout = regexTimeout;
+            Services = services;
             Results = results;
             NodeLayout = nodeLayout;
         }
 
         internal Rule Rule { get; }
 
-        internal IReadOnlyDictionary<string, IRuleFunction> Functions { get; }
-
-        internal TimeSpan RegexTimeout { get; }
+        internal EvaluationServices Services { get; }
 
         internal ParameterExpression? Results { get; }
 
@@ -370,7 +403,7 @@ internal static class RuleExpressionCompiler
             // Computed left-hand side: compile it (field access stays reflection-free), then
             // apply the operator through the shared boxed evaluator so the result matches the
             // interpreter exactly.
-            return ApplySharedOperator(leaf, BuildValueExpression(leaf.Left, fact, context.Rule), context);
+            return ApplySharedOperator(leaf, BuildValueExpression(leaf.Left, fact, context.Rule, context.Services), context);
         }
 
         if (leaf.Field is null)
@@ -485,7 +518,7 @@ internal static class RuleExpressionCompiler
         }
 
         ParameterExpression element = Expression.Parameter(elementType, "element");
-        var elementContext = new Context(context.Rule, context.Functions, context.RegexTimeout, null, null);
+        var elementContext = new Context(context.Rule, context.Services, null, null);
         LambdaExpression predicate = Expression.Lambda(
             typeof(Func<,>).MakeGenericType(elementType, typeof(bool)),
             BuildNode(leaf.ElementCondition!, 0, element, elementContext),
@@ -615,8 +648,7 @@ internal static class RuleExpressionCompiler
             ApplyOperatorMethod,
             Expression.Constant(leaf, typeof(ConditionLeaf)),
             boxedValue,
-            Expression.Constant(context.Functions, typeof(IReadOnlyDictionary<string, IRuleFunction>)),
-            Expression.Constant(context.RegexTimeout, typeof(TimeSpan)));
+            Expression.Constant(context.Services, typeof(EvaluationServices)));
 
     private static Expression BuildComparison(Expression value, ConditionLeaf leaf, Context context)
     {
@@ -875,7 +907,7 @@ internal static class RuleExpressionCompiler
 
     private static Expression CallFunction(ConditionLeaf leaf, Expression boxedFieldValue, Context context)
     {
-        if (!context.Functions.TryGetValue(leaf.FunctionName!, out IRuleFunction? function))
+        if (!context.Services.Functions.TryGetValue(leaf.FunctionName!, out IRuleFunction? function))
         {
             throw new RuleCompilationException(
                 context.Rule.Id,
@@ -924,7 +956,7 @@ internal static class RuleExpressionCompiler
         {
             // Bounded: the pattern comes from the rule author, the subject from consumer data,
             // so a catastrophic backtracker must fail loudly instead of pinning the thread.
-            return new Regex(pattern, RegexOptions.Compiled, context.RegexTimeout);
+            return new Regex(pattern, RegexOptions.Compiled, context.Services.RegexTimeout);
         }
         catch (ArgumentException ex)
         {

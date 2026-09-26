@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace RuleWright.Serialization;
@@ -14,17 +15,33 @@ namespace RuleWright.Serialization;
 public static class RuleSetValidator
 {
     /// <summary>
-    /// Validates a parsed JSON document as a rule or rule set.
+    /// Validates a parsed JSON document as a rule or rule set, against the built-in
+    /// vocabulary only.
     /// </summary>
     /// <param name="document">The document root.</param>
     /// <returns>A result carrying zero or more pointer-addressed errors.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="document"/> is null.</exception>
     public static RuleSetValidationResult Validate(RuleJsonValue document)
+        => Validate(document, null);
+
+    /// <summary>
+    /// Validates a parsed JSON document as a rule or rule set, folding an engine's registered
+    /// vocabulary (custom action types) into the schema contract. This is the overload
+    /// <c>RuleWrightEngine.Validate</c> uses, so documents that name that engine's registered
+    /// actions validate cleanly while misspellings are still rejected.
+    /// </summary>
+    /// <param name="document">The document root.</param>
+    /// <param name="options">The engine-registered vocabulary, or null for the built-ins only.</param>
+    /// <returns>A result carrying zero or more pointer-addressed errors.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="document"/> is null.</exception>
+    public static RuleSetValidationResult Validate(RuleJsonValue document, RuleDocumentOptions? options)
     {
         if (document is null)
         {
             throw new ArgumentNullException(nameof(document));
         }
+
+        options ??= RuleDocumentOptions.Default;
 
         var errors = new List<RuleValidationError>();
         if (document.Kind != RuleJsonValueKind.Object)
@@ -45,30 +62,32 @@ public static class RuleSetValidator
             }
 
             ValidateUnknownProperties(document, string.Empty, DecisionTableDocumentProperties, errors);
-            ValidateDecisionTable(decisionTable, "/decisionTable", errors);
+            ValidateDecisionTable(decisionTable, "/decisionTable", errors, options);
         }
         else if (document.TryGetProperty("rules", out _))
         {
-            ValidateRuleSet(document, errors);
+            ValidateRuleSet(document, errors, options);
         }
         else
         {
-            ValidateRule(document, string.Empty, errors);
+            ValidateRule(document, string.Empty, errors, EmptyScope, options);
         }
 
         return errors.Count == 0 ? RuleSetValidationResult.Success : new RuleSetValidationResult(errors);
     }
 
     private static readonly string[] DecisionTableDocumentProperties = { "decisionTable" };
-    private static readonly string[] RuleSetProperties = { "name", "description", "stopAfterFirstMatch", "rules" };
-    private static readonly string[] RuleProperties = { "id", "description", "priority", "enabled", "condition", "actions", "else", "layout" };
+    private static readonly string[] RuleSetProperties = { "name", "description", "stopAfterFirstMatch", "params", "rules" };
+    private static readonly string[] RuleProperties = { "id", "description", "priority", "enabled", "condition", "actions", "else", "failureMessage", "params", "layout" };
     private static readonly string[] GroupProperties = { "type", "operator", "rules" };
     private static readonly string[] LeafProperties = { "field", "expression", "operator", "value", "name", "condition" };
     private static readonly string[] ActionProperties = { "type", "target", "value" };
-    private static readonly string[] DecisionTableProperties = { "id", "name", "description", "hitPolicy", "inputs", "outputs", "rows" };
+    private static readonly string[] DecisionTableProperties = { "id", "name", "description", "hitPolicy", "params", "inputs", "outputs", "rows" };
     private static readonly string[] DecisionInputProperties = { "field", "operator" };
     private static readonly string[] DecisionOutputProperties = { "target", "type" };
     private static readonly string[] DecisionRowProperties = { "when", "then" };
+
+    private static readonly HashSet<string> EmptyScope = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
     /// Reports any property the schema does not define. The vocabulary is closed, so an
@@ -97,9 +116,12 @@ public static class RuleSetValidator
             ? name
             : name.Replace("~", "~0").Replace("/", "~1");
 
-    private static void ValidateRuleSet(RuleJsonValue ruleSet, List<RuleValidationError> errors)
+    private static void ValidateRuleSet(
+        RuleJsonValue ruleSet, List<RuleValidationError> errors, RuleDocumentOptions options)
     {
         ValidateUnknownProperties(ruleSet, string.Empty, RuleSetProperties, errors);
+
+        HashSet<string> globalParams = ValidateParams(ruleSet, string.Empty, EmptyScope, errors);
 
         if (ruleSet.TryGetProperty("name", out RuleJsonValue name) && name.Kind != RuleJsonValueKind.String)
         {
@@ -136,7 +158,7 @@ public static class RuleSetValidator
         for (int i = 0; i < rules.Items.Count; i++)
         {
             string path = "/rules/" + i.ToString(CultureInfo.InvariantCulture);
-            ValidateRule(rules.Items[i], path, errors);
+            ValidateRule(rules.Items[i], path, errors, globalParams, options);
 
             if (rules.Items[i].Kind == RuleJsonValueKind.Object
                 && rules.Items[i].TryGetProperty("id", out RuleJsonValue id)
@@ -148,7 +170,12 @@ public static class RuleSetValidator
         }
     }
 
-    private static void ValidateRule(RuleJsonValue rule, string path, List<RuleValidationError> errors)
+    private static void ValidateRule(
+        RuleJsonValue rule,
+        string path,
+        List<RuleValidationError> errors,
+        HashSet<string> globalParams,
+        RuleDocumentOptions options)
     {
         if (rule.Kind != RuleJsonValueKind.Object)
         {
@@ -157,6 +184,11 @@ public static class RuleSetValidator
         }
 
         ValidateUnknownProperties(rule, path, RuleProperties, errors);
+
+        // The rule body's param scope: its own params plus the set's, local names shadowing
+        // global ones.
+        HashSet<string> scope = ValidateParams(rule, path, globalParams, errors);
+        scope.UnionWith(globalParams);
 
         if (!rule.TryGetProperty("id", out RuleJsonValue id))
         {
@@ -189,17 +221,23 @@ public static class RuleSetValidator
             errors.Add(new RuleValidationError(path + "/enabled", "'enabled' must be a boolean."));
         }
 
+        if (rule.TryGetProperty("failureMessage", out RuleJsonValue failureMessage)
+            && (failureMessage.Kind != RuleJsonValueKind.String || failureMessage.GetString().Length == 0))
+        {
+            errors.Add(new RuleValidationError(path + "/failureMessage", "'failureMessage' must be a non-empty string."));
+        }
+
         if (!rule.TryGetProperty("condition", out RuleJsonValue condition))
         {
             errors.Add(new RuleValidationError(path, "'condition' is required."));
         }
         else
         {
-            ValidateCondition(condition, path + "/condition", errors);
+            ValidateCondition(condition, path + "/condition", errors, scope);
         }
 
-        ValidateActionArray(rule, "actions", path, errors);
-        ValidateActionArray(rule, "else", path, errors);
+        ValidateActionArray(rule, "actions", path, errors, scope, options);
+        ValidateActionArray(rule, "else", path, errors, scope, options);
 
         if (rule.TryGetProperty("layout", out RuleJsonValue layout) && layout.Kind != RuleJsonValueKind.Object)
         {
@@ -208,7 +246,11 @@ public static class RuleSetValidator
     }
 
     private static void ValidateCondition(
-        RuleJsonValue condition, string path, List<RuleValidationError> errors, bool insideQuantifier = false)
+        RuleJsonValue condition,
+        string path,
+        List<RuleValidationError> errors,
+        HashSet<string> paramScope,
+        bool insideQuantifier = false)
     {
         if (condition.Kind != RuleJsonValueKind.Object)
         {
@@ -225,11 +267,11 @@ public static class RuleSetValidator
                 return;
             }
 
-            ValidateGroup(condition, path, errors, insideQuantifier);
+            ValidateGroup(condition, path, errors, paramScope, insideQuantifier);
         }
         else
         {
-            ValidateLeaf(condition, path, errors, insideQuantifier);
+            ValidateLeaf(condition, path, errors, paramScope, insideQuantifier);
         }
     }
 
@@ -263,7 +305,11 @@ public static class RuleSetValidator
     }
 
     private static void ValidateGroup(
-        RuleJsonValue group, string path, List<RuleValidationError> errors, bool insideQuantifier = false)
+        RuleJsonValue group,
+        string path,
+        List<RuleValidationError> errors,
+        HashSet<string> paramScope,
+        bool insideQuantifier = false)
     {
         ValidateUnknownProperties(group, path, GroupProperties, errors);
 
@@ -298,12 +344,16 @@ public static class RuleSetValidator
 
         for (int i = 0; i < rules.Items.Count; i++)
         {
-            ValidateCondition(rules.Items[i], path + "/rules/" + i.ToString(CultureInfo.InvariantCulture), errors, insideQuantifier);
+            ValidateCondition(rules.Items[i], path + "/rules/" + i.ToString(CultureInfo.InvariantCulture), errors, paramScope, insideQuantifier);
         }
     }
 
     private static void ValidateLeaf(
-        RuleJsonValue leaf, string path, List<RuleValidationError> errors, bool insideQuantifier = false)
+        RuleJsonValue leaf,
+        string path,
+        List<RuleValidationError> errors,
+        HashSet<string> paramScope,
+        bool insideQuantifier = false)
     {
         ValidateUnknownProperties(leaf, path, LeafProperties, errors);
 
@@ -334,7 +384,7 @@ public static class RuleSetValidator
 
         if (Core.ConditionLeaf.IsQuantifier(parsedOperator))
         {
-            ValidateQuantifier(leaf, path, hasField, op.GetString(), errors);
+            ValidateQuantifier(leaf, path, hasField, op.GetString(), errors, paramScope);
             return;
         }
 
@@ -372,7 +422,7 @@ public static class RuleSetValidator
         }
         else if (hasExpression)
         {
-            ValidateValueExpression(leftExpression, path + "/expression", errors);
+            ValidateValueExpression(leftExpression, path + "/expression", errors, paramScope, insideQuantifier);
         }
         else if (!hasField)
         {
@@ -469,7 +519,12 @@ public static class RuleSetValidator
     /// 'condition' to each element, so it takes neither a 'value' nor an 'expression'.
     /// </summary>
     private static void ValidateQuantifier(
-        RuleJsonValue leaf, string path, bool hasField, string operatorName, List<RuleValidationError> errors)
+        RuleJsonValue leaf,
+        string path,
+        bool hasField,
+        string operatorName,
+        List<RuleValidationError> errors,
+        HashSet<string> paramScope)
     {
         if (!hasField)
         {
@@ -499,7 +554,7 @@ public static class RuleSetValidator
             return;
         }
 
-        ValidateCondition(elementCondition, path + "/condition", errors, insideQuantifier: true);
+        ValidateCondition(elementCondition, path + "/condition", errors, paramScope, insideQuantifier: true);
     }
 
     /// <summary>
@@ -563,7 +618,13 @@ public static class RuleSetValidator
         }
     }
 
-    private static void ValidateActionArray(RuleJsonValue rule, string property, string path, List<RuleValidationError> errors)
+    private static void ValidateActionArray(
+        RuleJsonValue rule,
+        string property,
+        string path,
+        List<RuleValidationError> errors,
+        HashSet<string> paramScope,
+        RuleDocumentOptions options)
     {
         if (!rule.TryGetProperty(property, out RuleJsonValue actions))
         {
@@ -578,11 +639,21 @@ public static class RuleSetValidator
 
         for (int i = 0; i < actions.Items.Count; i++)
         {
-            ValidateAction(actions.Items[i], path + "/" + property + "/" + i.ToString(CultureInfo.InvariantCulture), errors);
+            ValidateAction(
+                actions.Items[i],
+                path + "/" + property + "/" + i.ToString(CultureInfo.InvariantCulture),
+                errors,
+                paramScope,
+                options);
         }
     }
 
-    private static void ValidateAction(RuleJsonValue action, string path, List<RuleValidationError> errors)
+    private static void ValidateAction(
+        RuleJsonValue action,
+        string path,
+        List<RuleValidationError> errors,
+        HashSet<string> paramScope,
+        RuleDocumentOptions options)
     {
         if (action.Kind != RuleJsonValueKind.Object)
         {
@@ -593,19 +664,16 @@ public static class RuleSetValidator
         ValidateUnknownProperties(action, path, ActionProperties, errors);
 
         bool hasType = action.TryGetProperty("type", out RuleJsonValue type);
-        bool isRemove = hasType && type.Kind == RuleJsonValueKind.String && type.GetString() == Core.RuleAction.RemoveOutputType;
-        if (!hasType
-            || type.Kind != RuleJsonValueKind.String
-            || (type.GetString() != Core.RuleAction.SetOutputType
-                && type.GetString() != Core.RuleAction.AddToOutputType
-                && type.GetString() != Core.RuleAction.AppendToOutputType
-                && type.GetString() != Core.RuleAction.RemoveOutputType))
+        string? typeName = hasType && type.Kind == RuleJsonValueKind.String ? type.GetString() : null;
+        bool isRemove = typeName == Core.RuleAction.RemoveOutputType;
+        bool isCustom = typeName is not null && options.IsCustomActionType(typeName);
+        if (typeName is null || (!IsActionType(typeName, allowRemove: true, options)))
         {
             errors.Add(new RuleValidationError(
                 hasType ? path + "/type" : path,
                 $"Action 'type' must be \"{Core.RuleAction.SetOutputType}\", "
                 + $"\"{Core.RuleAction.AddToOutputType}\", \"{Core.RuleAction.AppendToOutputType}\", "
-                + $"or \"{Core.RuleAction.RemoveOutputType}\"."));
+                + $"or \"{Core.RuleAction.RemoveOutputType}\"" + RegisteredActionSuffix(options)));
         }
 
         if (!action.TryGetProperty("target", out RuleJsonValue target)
@@ -628,15 +696,32 @@ public static class RuleSetValidator
         }
         else if (!hasValue)
         {
-            errors.Add(new RuleValidationError(path, "Action 'value' is required (a constant scalar or a value expression)."));
+            // A registered custom action decides for itself whether it needs a value; the
+            // built-in writers always do.
+            if (!isCustom)
+            {
+                errors.Add(new RuleValidationError(path, "Action 'value' is required (a constant scalar or a value expression)."));
+            }
         }
         else
         {
-            ValidateValueExpression(value, path + "/value", errors);
+            ValidateValueExpression(value, path + "/value", errors, paramScope, insideQuantifier: false);
         }
     }
 
-    private static void ValidateValueExpression(RuleJsonValue node, string path, List<RuleValidationError> errors)
+    private static string RegisteredActionSuffix(RuleDocumentOptions options)
+        => options.CustomActionTypes.Count == 0
+            ? "."
+            : ", or a registered custom action type ("
+                + string.Join(", ", options.CustomActionTypes.OrderBy(t => t, StringComparer.Ordinal).Select(t => "\"" + t + "\""))
+                + ").";
+
+    private static void ValidateValueExpression(
+        RuleJsonValue node,
+        string path,
+        List<RuleValidationError> errors,
+        HashSet<string> paramScope,
+        bool insideQuantifier)
     {
         if (node.Kind == RuleJsonValueKind.Array)
         {
@@ -653,17 +738,20 @@ public static class RuleSetValidator
         bool hasOp = node.TryGetProperty("op", out RuleJsonValue op);
         bool hasField = node.TryGetProperty("field", out RuleJsonValue field);
         bool hasLiteral = node.TryGetProperty("literal", out RuleJsonValue literal);
+        bool hasCall = node.TryGetProperty("call", out RuleJsonValue call);
+        bool hasParam = node.TryGetProperty("param", out RuleJsonValue param);
 
-        int discriminators = (hasOp ? 1 : 0) + (hasField ? 1 : 0) + (hasLiteral ? 1 : 0);
+        int discriminators = (hasOp ? 1 : 0) + (hasField ? 1 : 0) + (hasLiteral ? 1 : 0)
+            + (hasCall ? 1 : 0) + (hasParam ? 1 : 0);
         if (discriminators == 0)
         {
-            errors.Add(new RuleValidationError(path, "An expression object must have exactly one of 'op', 'field', or 'literal'."));
+            errors.Add(new RuleValidationError(path, "An expression object must have exactly one of 'op', 'field', 'literal', 'call', or 'param'."));
             return;
         }
 
         if (discriminators > 1)
         {
-            errors.Add(new RuleValidationError(path, "An expression object must have exactly one of 'op', 'field', or 'literal', not several."));
+            errors.Add(new RuleValidationError(path, "An expression object must have exactly one of 'op', 'field', 'literal', 'call', or 'param', not several."));
             return;
         }
 
@@ -682,6 +770,63 @@ public static class RuleSetValidator
             if (literal.Kind is RuleJsonValueKind.Object or RuleJsonValueKind.Array)
             {
                 errors.Add(new RuleValidationError(path + "/literal", "Expression 'literal' must be a scalar or null."));
+            }
+
+            return;
+        }
+
+        if (hasParam)
+        {
+            if (param.Kind != RuleJsonValueKind.String || param.GetString().Length == 0)
+            {
+                errors.Add(new RuleValidationError(path + "/param", "Expression 'param' must be a non-empty string."));
+            }
+            else if (insideQuantifier)
+            {
+                // A param's definition reads the root fact; inside a quantifier's condition,
+                // field paths resolve against the element, so inlining one there would
+                // silently answer null. Rejected until a correlated-scope form is defined.
+                errors.Add(new RuleValidationError(
+                    path + "/param",
+                    "A 'param' reference is not valid inside a quantifier's 'condition': params are computed "
+                    + "from the root fact, while a quantifier's field paths resolve against the element."));
+            }
+            else if (!paramScope.Contains(param.GetString()))
+            {
+                errors.Add(new RuleValidationError(
+                    path + "/param",
+                    $"Unknown param '{param.GetString()}'. Define it in the rule's 'params' or the rule set's 'params'."));
+            }
+
+            return;
+        }
+
+        if (hasCall)
+        {
+            if (call.Kind != RuleJsonValueKind.String || call.GetString().Length == 0)
+            {
+                errors.Add(new RuleValidationError(path + "/call", "Expression 'call' must be a non-empty string (a registered value function name)."));
+            }
+
+            // Operands are optional (a no-argument call); the registered function's declared
+            // arity, if any, is enforced by the engine at LoadRuleSet.
+            if (node.TryGetProperty("operands", out RuleJsonValue callOperands))
+            {
+                if (callOperands.Kind != RuleJsonValueKind.Array)
+                {
+                    errors.Add(new RuleValidationError(path + "/operands", "'operands' must be an array."));
+                    return;
+                }
+
+                for (int i = 0; i < callOperands.Items.Count; i++)
+                {
+                    ValidateValueExpression(
+                        callOperands.Items[i],
+                        path + "/operands/" + i.ToString(CultureInfo.InvariantCulture),
+                        errors,
+                        paramScope,
+                        insideQuantifier);
+                }
             }
 
             return;
@@ -722,11 +867,155 @@ public static class RuleSetValidator
 
         for (int i = 0; i < operands.Items.Count; i++)
         {
-            ValidateValueExpression(operands.Items[i], path + "/operands/" + i.ToString(CultureInfo.InvariantCulture), errors);
+            ValidateValueExpression(
+                operands.Items[i],
+                path + "/operands/" + i.ToString(CultureInfo.InvariantCulture),
+                errors,
+                paramScope,
+                insideQuantifier);
         }
     }
 
-    private static void ValidateDecisionTable(RuleJsonValue table, string path, List<RuleValidationError> errors)
+    /// <summary>
+    /// Validates a container's optional <c>params</c> object — each definition a value
+    /// expression, references resolvable (this object's names plus <paramref name="outerScope"/>),
+    /// and no definition cycles — and returns the names it defines. Params are named
+    /// subexpressions the parser inlines where referenced, so everything here is decidable
+    /// structurally.
+    /// </summary>
+    private static HashSet<string> ValidateParams(
+        RuleJsonValue container, string path, HashSet<string> outerScope, List<RuleValidationError> errors)
+    {
+        if (!container.TryGetProperty("params", out RuleJsonValue paramsValue))
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        string paramsPath = path + "/params";
+        if (paramsValue.Kind != RuleJsonValueKind.Object)
+        {
+            errors.Add(new RuleValidationError(paramsPath, "'params' must be an object mapping names to value expressions."));
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (KeyValuePair<string, RuleJsonValue> definition in paramsValue.Properties)
+        {
+            if (definition.Key.Length == 0)
+            {
+                errors.Add(new RuleValidationError(paramsPath, "Param names must not be empty."));
+                continue;
+            }
+
+            names.Add(definition.Key);
+        }
+
+        // A definition may reference the outer scope and its sibling params (in any order);
+        // its own name only through a cycle, which is rejected below.
+        var definitionScope = new HashSet<string>(names, StringComparer.Ordinal);
+        definitionScope.UnionWith(outerScope);
+        foreach (KeyValuePair<string, RuleJsonValue> definition in paramsValue.Properties)
+        {
+            ValidateValueExpression(
+                definition.Value,
+                paramsPath + "/" + EscapePointer(definition.Key),
+                errors,
+                definitionScope,
+                insideQuantifier: false);
+        }
+
+        ValidateParamCycles(paramsValue, paramsPath, names, errors);
+        return names;
+    }
+
+    /// <summary>
+    /// Rejects definition cycles among a <c>params</c> object's own names (references to outer
+    /// scopes terminate, and outer definitions cannot see inner names, so cycles cannot span
+    /// levels). Substitution would otherwise never terminate.
+    /// </summary>
+    private static void ValidateParamCycles(
+        RuleJsonValue paramsValue, string paramsPath, HashSet<string> names, List<RuleValidationError> errors)
+    {
+        var references = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (KeyValuePair<string, RuleJsonValue> definition in paramsValue.Properties)
+        {
+            var referenced = new HashSet<string>(StringComparer.Ordinal);
+            CollectParamReferences(definition.Value, names, referenced);
+            references[definition.Key] = referenced;
+        }
+
+        // 0 = unvisited, 1 = on the current path, 2 = proven acyclic.
+        var state = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (string name in references.Keys)
+        {
+            if (HasCycle(name, references, state))
+            {
+                errors.Add(new RuleValidationError(
+                    paramsPath + "/" + EscapePointer(name),
+                    $"Param '{name}' participates in a circular reference; params must not reference themselves, directly or indirectly."));
+            }
+        }
+    }
+
+    private static bool HasCycle(
+        string name, Dictionary<string, HashSet<string>> references, Dictionary<string, int> state)
+    {
+        state.TryGetValue(name, out int seen);
+        if (seen == 2)
+        {
+            return false;
+        }
+
+        if (seen == 1)
+        {
+            return true;
+        }
+
+        state[name] = 1;
+        foreach (string referenced in references[name])
+        {
+            if (HasCycle(referenced, references, state))
+            {
+                // Leave the whole path marked in-progress so each participant reports once.
+                return true;
+            }
+        }
+
+        state[name] = 2;
+        return false;
+    }
+
+    /// <summary>Collects every <c>{ "param": ... }</c> reference to one of <paramref name="names"/> under a node.</summary>
+    private static void CollectParamReferences(RuleJsonValue node, HashSet<string> names, HashSet<string> referenced)
+    {
+        if (node.Kind == RuleJsonValueKind.Object)
+        {
+            if (node.TryGetProperty("param", out RuleJsonValue param)
+                && param.Kind == RuleJsonValueKind.String
+                && names.Contains(param.GetString()))
+            {
+                referenced.Add(param.GetString());
+            }
+
+            foreach (KeyValuePair<string, RuleJsonValue> property in node.Properties)
+            {
+                CollectParamReferences(property.Value, names, referenced);
+            }
+
+            return;
+        }
+
+        if (node.Kind == RuleJsonValueKind.Array)
+        {
+            foreach (RuleJsonValue item in node.Items)
+            {
+                CollectParamReferences(item, names, referenced);
+            }
+        }
+    }
+
+    private static void ValidateDecisionTable(
+        RuleJsonValue table, string path, List<RuleValidationError> errors, RuleDocumentOptions options)
     {
         if (table.Kind != RuleJsonValueKind.Object)
         {
@@ -736,6 +1025,8 @@ public static class RuleSetValidator
 
         ValidateUnknownProperties(table, path, DecisionTableProperties, errors);
 
+        HashSet<string> paramScope = ValidateParams(table, path, EmptyScope, errors);
+
         if (table.TryGetProperty("hitPolicy", out RuleJsonValue hitPolicy)
             && (hitPolicy.Kind != RuleJsonValueKind.String || hitPolicy.GetString() is not ("collect" or "first")))
         {
@@ -743,7 +1034,7 @@ public static class RuleSetValidator
         }
 
         int inputCount = ValidateDecisionInputs(table, path, errors, out RuleJsonValue inputs);
-        int outputCount = ValidateDecisionOutputs(table, path, errors);
+        int outputCount = ValidateDecisionOutputs(table, path, errors, options);
 
         if (!table.TryGetProperty("rows", out RuleJsonValue rows) || rows.Kind != RuleJsonValueKind.Array)
         {
@@ -760,7 +1051,7 @@ public static class RuleSetValidator
         for (int r = 0; r < rows.Items.Count; r++)
         {
             string rowPath = path + "/rows/" + r.ToString(CultureInfo.InvariantCulture);
-            ValidateDecisionRow(rows.Items[r], rowPath, inputs, inputCount, outputCount, errors);
+            ValidateDecisionRow(rows.Items[r], rowPath, inputs, inputCount, outputCount, errors, paramScope);
         }
     }
 
@@ -805,7 +1096,8 @@ public static class RuleSetValidator
         return inputs.Items.Count;
     }
 
-    private static int ValidateDecisionOutputs(RuleJsonValue table, string path, List<RuleValidationError> errors)
+    private static int ValidateDecisionOutputs(
+        RuleJsonValue table, string path, List<RuleValidationError> errors, RuleDocumentOptions options)
     {
         if (!table.TryGetProperty("outputs", out RuleJsonValue outputs) || outputs.Kind != RuleJsonValueKind.Array || outputs.Items.Count == 0)
         {
@@ -833,12 +1125,14 @@ public static class RuleSetValidator
             }
 
             if (column.TryGetProperty("type", out RuleJsonValue type)
-                && (type.Kind != RuleJsonValueKind.String || !IsActionType(type.GetString())))
+                && (type.Kind != RuleJsonValueKind.String
+                    || !IsActionType(type.GetString(), allowRemove: false, options)))
             {
                 errors.Add(new RuleValidationError(
                     columnPath + "/type",
                     $"Output 'type' must be \"{Core.RuleAction.SetOutputType}\", "
-                    + $"\"{Core.RuleAction.AddToOutputType}\", or \"{Core.RuleAction.AppendToOutputType}\"."));
+                    + $"\"{Core.RuleAction.AddToOutputType}\", or \"{Core.RuleAction.AppendToOutputType}\""
+                    + RegisteredActionSuffix(options)));
             }
         }
 
@@ -851,7 +1145,8 @@ public static class RuleSetValidator
         RuleJsonValue inputs,
         int inputCount,
         int outputCount,
-        List<RuleValidationError> errors)
+        List<RuleValidationError> errors,
+        HashSet<string> paramScope)
     {
         if (row.Kind != RuleJsonValueKind.Object)
         {
@@ -896,7 +1191,12 @@ public static class RuleSetValidator
                 // A null 'then' cell skips that output; any other value is a value expression.
                 if (then.Items[c].Kind != RuleJsonValueKind.Null)
                 {
-                    ValidateValueExpression(then.Items[c], path + "/then/" + c.ToString(CultureInfo.InvariantCulture), errors);
+                    ValidateValueExpression(
+                        then.Items[c],
+                        path + "/then/" + c.ToString(CultureInfo.InvariantCulture),
+                        errors,
+                        paramScope,
+                        insideQuantifier: false);
                 }
             }
         }
@@ -961,8 +1261,10 @@ public static class RuleSetValidator
     private static bool IsTableOperator(Core.ConditionOperator op)
         => op is not (Core.ConditionOperator.IsNull or Core.ConditionOperator.IsNotNull or Core.ConditionOperator.Custom);
 
-    private static bool IsActionType(string type)
+    private static bool IsActionType(string type, bool allowRemove, RuleDocumentOptions options)
         => type == Core.RuleAction.SetOutputType
         || type == Core.RuleAction.AddToOutputType
-        || type == Core.RuleAction.AppendToOutputType;
+        || type == Core.RuleAction.AppendToOutputType
+        || (allowRemove && type == Core.RuleAction.RemoveOutputType)
+        || options.IsCustomActionType(type);
 }

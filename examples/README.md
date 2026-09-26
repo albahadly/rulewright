@@ -15,6 +15,18 @@ var engine = new RuleWrightBuilder()
     .UseJsonReader(new SystemTextJsonReader())
     // Only 12-custom-function.json and 18-builtin-functions.json need this:
     .RegisterBuiltInFunctions()
+    // Only 23-value-functions.json needs this:
+    .RegisterValueFunction("RoundTo", args =>
+        args.Length == 2 && args[0] is decimal v && args[1] is long d ? decimal.Round(v, (int)d) : null)
+    // Only 25-custom-action.json needs this:
+    .RegisterAction("setIfHigher", ctx =>
+    {
+        ctx.TryGetOutput(ctx.Target, out object? current);
+        if (ctx.Value is decimal bid && (current is not decimal held || bid > held))
+        {
+            ctx.SetOutput(ctx.Target, bid);
+        }
+    })
     .Build();
 
 string json = File.ReadAllText("examples/07-computed-values.json");
@@ -71,6 +83,10 @@ or must exist on the type (typed facts) — see `05-null-and-coalesce.json`.
 | [19-decision-table-computed-cell.json](19-decision-table-computed-cell.json) | A decision table `then` cell is an expression, not just a constant — a pricing table computes its output from the fact. |
 | [20-collection-operators.json](20-collection-operators.json) | Collection quantifiers: `Any` / `All` / `None` over a collection field, `"$"` for scalar elements, and `count`. |
 | [21-stop-after-first-match.json](21-stop-after-first-match.json) | `stopAfterFirstMatch` — the *set’s own* semantics: evaluation stops at the first rule that passes, with no option from the caller (compare 02). |
+| [22-scoped-params.json](22-scoped-params.json) | Scoped params: named subexpressions defined once in `params` and referenced as `{ "param": … }`; a rule's params shadow the set's. |
+| [23-value-functions.json](23-value-functions.json) | `{ "call": … }` invokes a value function registered in C# (`RegisterValueFunction`) — computed values beyond the built-in operators, still pure data in the document. |
+| [24-failure-messages.json](24-failure-messages.json) | `failureMessage` — a rule's authored explanation for saying no, surfaced on the result's `Failures` list when the rule is evaluated and does not pass. |
+| [25-custom-action.json](25-custom-action.json) | A custom action type registered in C# (`RegisterAction`) — here `setIfHigher`, which keeps the highest value written to its target. |
 
 ## Key ideas the examples lean on
 

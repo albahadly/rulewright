@@ -23,21 +23,28 @@ public sealed class RuleWrightEngine
         new ReadOnlyDictionary<string, object?>(new Dictionary<string, object?>(StringComparer.Ordinal));
 
     private readonly IRuleJsonReader? _jsonReader;
-    private readonly IReadOnlyDictionary<string, IRuleFunction> _functions;
-    private readonly TimeSpan _regexTimeout;
+    private readonly EvaluationServices _services;
+    private readonly IReadOnlyDictionary<string, IRuleActionHandler> _actions;
+    private readonly RuleDocumentOptions _documentOptions;
     private readonly ReadOnlyCollection<string> _registeredFunctions;
     private readonly ReadOnlyCollection<RuleFunctionDescriptor> _functionCatalog;
+    private readonly ReadOnlyCollection<string> _registeredValueFunctions;
+    private readonly ReadOnlyCollection<RuleValueFunctionDescriptor> _valueFunctionCatalog;
+    private readonly ReadOnlyCollection<string> _registeredActions;
     private readonly ConcurrentDictionary<CompiledCacheKey, object> _compiledRules =
         new ConcurrentDictionary<CompiledCacheKey, object>();
 
     internal RuleWrightEngine(
         IRuleJsonReader? jsonReader,
         IReadOnlyDictionary<string, IRuleFunction> functions,
+        IReadOnlyDictionary<string, IRuleValueFunction> valueFunctions,
+        IReadOnlyDictionary<string, IRuleActionHandler> actions,
         TimeSpan regexTimeout)
     {
         _jsonReader = jsonReader;
-        _functions = functions;
-        _regexTimeout = regexTimeout;
+        _services = new EvaluationServices(functions, valueFunctions, regexTimeout);
+        _actions = actions;
+        _documentOptions = new RuleDocumentOptions(actions.Keys);
 
         var names = new List<string>(functions.Keys);
         names.Sort(StringComparer.Ordinal);
@@ -53,6 +60,25 @@ public sealed class RuleWrightEngine
         }
 
         _functionCatalog = new ReadOnlyCollection<RuleFunctionDescriptor>(descriptors);
+
+        var valueNames = new List<string>(valueFunctions.Keys);
+        valueNames.Sort(StringComparer.Ordinal);
+        _registeredValueFunctions = new ReadOnlyCollection<string>(valueNames);
+
+        var valueDescriptors = new List<RuleValueFunctionDescriptor>(valueNames.Count);
+        foreach (var name in valueNames)
+        {
+            var function = valueFunctions[name];
+            valueDescriptors.Add(function is IRuleValueFunctionMetadata metadata
+                ? new RuleValueFunctionDescriptor(name, metadata.Description, metadata.RequiredOperandCount)
+                : new RuleValueFunctionDescriptor(name, description: null, requiredOperandCount: null));
+        }
+
+        _valueFunctionCatalog = new ReadOnlyCollection<RuleValueFunctionDescriptor>(valueDescriptors);
+
+        var actionNames = new List<string>(actions.Keys);
+        actionNames.Sort(StringComparer.Ordinal);
+        _registeredActions = new ReadOnlyCollection<string>(actionNames);
     }
 
     /// <summary>
@@ -70,6 +96,26 @@ public sealed class RuleWrightEngine
     /// <see cref="RuleFunctionValueKind.Unspecified"/>.
     /// </summary>
     public IReadOnlyList<RuleFunctionDescriptor> FunctionCatalog => _functionCatalog;
+
+    /// <summary>
+    /// The names of the <c>call</c> value functions registered on this engine, sorted ordinally.
+    /// </summary>
+    public IReadOnlyList<string> RegisteredValueFunctions => _registeredValueFunctions;
+
+    /// <summary>
+    /// Discovery metadata for the <c>call</c> value functions registered on this engine, in the
+    /// same order as <see cref="RegisteredValueFunctions"/>. Functions that don't implement
+    /// <see cref="IRuleValueFunctionMetadata"/> appear with a null description and no declared
+    /// operand count.
+    /// </summary>
+    public IReadOnlyList<RuleValueFunctionDescriptor> ValueFunctionCatalog => _valueFunctionCatalog;
+
+    /// <summary>
+    /// The names of the custom action types registered on this engine, sorted ordinally. A rule
+    /// document may use these in addition to the built-in action types listed in
+    /// <see cref="Serialization.RuleSchemaCatalog.ActionTypes"/>.
+    /// </summary>
+    public IReadOnlyList<string> RegisteredActions => _registeredActions;
 
     /// <summary>
     /// Parses, validates, and prepares a JSON rule document (a single rule or a rule set)
@@ -90,7 +136,7 @@ public sealed class RuleWrightEngine
         }
 
         RuleJsonValue document = RequireReader().Read(json);
-        return LoadRuleSet(RuleSetParser.Parse(document));
+        return LoadRuleSet(RuleSetParser.Parse(document, _documentOptions));
     }
 
     /// <summary>
@@ -115,6 +161,8 @@ public sealed class RuleWrightEngine
 
             (IReadOnlyDictionary<string, object?> Outputs, bool HasComplex) thenPlan = BuildOutputPlan(rule, rule.Actions);
             (IReadOnlyDictionary<string, object?> Outputs, bool HasComplex) elsePlan = BuildOutputPlan(rule, rule.ElseActions);
+            ValidateActionExpressions(rule, rule.Actions);
+            ValidateActionExpressions(rule, rule.ElseActions);
 
             int[] nodeLayout = ConditionNodeIndexer.BuildLayout(rule.Condition);
             entries.Add(new RuleEntry(
@@ -136,7 +184,7 @@ public sealed class RuleWrightEngine
     /// across evaluations). A branch with any computed, accumulating, or <c>removeOutput</c>
     /// action is marked complex and applied per evaluation instead.
     /// </summary>
-    private static (IReadOnlyDictionary<string, object?> Outputs, bool HasComplex) BuildOutputPlan(
+    private (IReadOnlyDictionary<string, object?> Outputs, bool HasComplex) BuildOutputPlan(
         Rule rule, IReadOnlyList<RuleAction> actions)
     {
         var outputs = new Dictionary<string, object?>(StringComparer.Ordinal);
@@ -146,9 +194,13 @@ public sealed class RuleWrightEngine
             if (!string.Equals(action.Type, RuleAction.SetOutputType, StringComparison.Ordinal)
                 && !string.Equals(action.Type, RuleAction.AddToOutputType, StringComparison.Ordinal)
                 && !string.Equals(action.Type, RuleAction.AppendToOutputType, StringComparison.Ordinal)
-                && !string.Equals(action.Type, RuleAction.RemoveOutputType, StringComparison.Ordinal))
+                && !string.Equals(action.Type, RuleAction.RemoveOutputType, StringComparison.Ordinal)
+                && !_actions.ContainsKey(action.Type))
             {
-                throw new RuleCompilationException(rule.Id, $"unknown action type '{action.Type}'.");
+                throw new RuleCompilationException(
+                    rule.Id,
+                    $"unknown action type '{action.Type}'. "
+                    + "Register custom action types with RuleWrightBuilder.RegisterAction before loading the rule set.");
             }
 
             if (OutputApplier.IsLiteralSet(action))
@@ -192,7 +244,7 @@ public sealed class RuleWrightEngine
             return new RuleSetValidationResult(new[] { new RuleValidationError(string.Empty, ex.Message) });
         }
 
-        return RuleSetValidator.Validate(document);
+        return RuleSetValidator.Validate(document, _documentOptions);
     }
 
     /// <summary>
@@ -235,7 +287,7 @@ public sealed class RuleWrightEngine
                 options,
                 CompilationMode.Interpreted,
                 (entry, results) => RuleInterpreter.Evaluate(
-                    entry.Rule.Condition, 0, boxedFact, _functions, _regexTimeout, results, entry.NodeLayout),
+                    entry.Rule.Condition, 0, boxedFact, _services, results, entry.NodeLayout),
                 (entry, isElse, running) => ApplyInterpretedOutputs(entry, isElse, boxedFact, running));
         }
 
@@ -257,7 +309,7 @@ public sealed class RuleWrightEngine
     /// overwrites its shared, pre-materialized outputs; otherwise each action's value is
     /// evaluated and applied (set/add/append/remove) in order via <see cref="OutputApplier"/>.
     /// </summary>
-    private static IReadOnlyDictionary<string, object?> ApplyInterpretedOutputs(
+    private IReadOnlyDictionary<string, object?> ApplyInterpretedOutputs(
         RuleEntry entry, bool isElse, object fact, IDictionary<string, object?> running)
     {
         IReadOnlyList<RuleAction> actions = isElse ? entry.Rule.ElseActions : entry.Rule.Actions;
@@ -277,11 +329,42 @@ public sealed class RuleWrightEngine
         var snapshot = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (RuleAction action in actions)
         {
-            object? value = ActionExpressionInterpreter.EvaluateValue(action.Value, fact);
-            OutputApplier.Apply(running, snapshot, action.Type, action.Target, value);
+            object? value = ActionExpressionInterpreter.EvaluateValue(action.Value, fact, _services);
+            ApplyAction(entry, isElse, fact, running, snapshot, action.Type, action.Target, value);
         }
 
         return new ReadOnlyDictionary<string, object?>(snapshot);
+    }
+
+    /// <summary>
+    /// Routes one action's already-computed value to a registered custom handler when the type
+    /// names one, otherwise to the built-in <see cref="OutputApplier"/> semantics. Both paths
+    /// funnel through here so custom actions behave identically for typed and dictionary facts.
+    /// </summary>
+    private void ApplyAction(
+        RuleEntry entry,
+        bool isElse,
+        object fact,
+        IDictionary<string, object?> running,
+        Dictionary<string, object?> snapshot,
+        string type,
+        string target,
+        object? value)
+    {
+        if (_actions.TryGetValue(type, out IRuleActionHandler? handler))
+        {
+            handler.Apply(new RuleActionContext(
+                running,
+                snapshot,
+                entry.Rule.Id,
+                isElse ? RuleBranch.Else : RuleBranch.Then,
+                target,
+                value,
+                fact));
+            return;
+        }
+
+        OutputApplier.Apply(running, snapshot, type, target, value);
     }
 
     private IReadOnlyDictionary<string, object?> ApplyCompiledOutputs<TFact>(
@@ -306,7 +389,7 @@ public sealed class RuleWrightEngine
         foreach (OutputStep<TFact> step in steps)
         {
             object? value = step.ValueFactory(fact);
-            OutputApplier.Apply(running, snapshot, step.Type, step.Target, value);
+            ApplyAction(entry, isElse, fact!, running, snapshot, step.Type, step.Target, value);
         }
 
         return new ReadOnlyDictionary<string, object?>(snapshot);
@@ -324,6 +407,7 @@ public sealed class RuleWrightEngine
             : null;
         var fired = new List<FiredRule>();
         var outputs = new Dictionary<string, object?>(StringComparer.Ordinal);
+        List<RuleFailure>? failures = null;
         bool stopped = false;
 
         // The set's own policy (a `first` decision table) and the caller's option combine with OR:
@@ -359,6 +443,12 @@ public sealed class RuleWrightEngine
 
             traceRules?.Add(new RuleTrace(entry.Rule.Id, matched, RuleSkipReason.None, conditionTrace));
 
+            if (!matched && entry.Rule.FailureMessage is string failureMessage)
+            {
+                // The rule was actually asked and said no; skipped rules never report.
+                (failures ??= new List<RuleFailure>()).Add(new RuleFailure(entry.Rule.Id, failureMessage));
+            }
+
             if (matched)
             {
                 // applyOutputs writes into the running outputs (overwrite, add, append, or
@@ -384,7 +474,8 @@ public sealed class RuleWrightEngine
             fired,
             new ReadOnlyDictionary<string, object?>(outputs),
             mode,
-            traceRules is null ? null : new EvaluationTrace(traceRules));
+            traceRules is null ? null : new EvaluationTrace(traceRules),
+            failures);
     }
 
     private CompiledRule<TFact> GetOrCompile<TFact>(RuleEntry entry)
@@ -397,7 +488,7 @@ public sealed class RuleWrightEngine
 
         return (CompiledRule<TFact>)_compiledRules.GetOrAdd(
             key,
-            _ => RuleExpressionCompiler.Compile<TFact>(entry.Rule, _functions, _regexTimeout, entry.NodeLayout));
+            _ => RuleExpressionCompiler.Compile<TFact>(entry.Rule, _services, entry.NodeLayout));
     }
 
     /// <summary>
@@ -420,10 +511,20 @@ public sealed class RuleWrightEngine
         }
 
         var leaf = (ConditionLeaf)node;
+        if (leaf.Left is not null)
+        {
+            ValidateValueExpression(rule, leaf.Left);
+        }
+
+        if (leaf.ElementCondition is not null)
+        {
+            ValidateLeaves(rule, leaf.ElementCondition);
+        }
+
         switch (leaf.Operator)
         {
             case ConditionOperator.Custom:
-                if (!_functions.ContainsKey(leaf.FunctionName!))
+                if (!_services.Functions.ContainsKey(leaf.FunctionName!))
                 {
                     throw new RuleCompilationException(
                         rule.Id,
@@ -464,6 +565,59 @@ public sealed class RuleWrightEngine
         }
     }
 
+    private void ValidateActionExpressions(Rule rule, IReadOnlyList<RuleAction> actions)
+    {
+        foreach (RuleAction action in actions)
+        {
+            ValidateValueExpression(rule, action.Value);
+        }
+    }
+
+    /// <summary>
+    /// Checks every <c>call</c> node in a value expression against the registered value
+    /// functions — name and, when the function declares one, operand count — so a bad call
+    /// fails at load exactly as an unregistered <c>custom</c> condition function does.
+    /// </summary>
+    private void ValidateValueExpression(Rule rule, ValueExpression expression)
+    {
+        switch (expression)
+        {
+            case OperatorExpression op:
+                foreach (ValueExpression operand in op.Operands)
+                {
+                    ValidateValueExpression(rule, operand);
+                }
+
+                break;
+
+            case CallExpression call:
+                if (!_services.ValueFunctions.TryGetValue(call.Name, out IRuleValueFunction? function))
+                {
+                    throw new RuleCompilationException(
+                        rule.Id,
+                        $"value function '{call.Name}' is not registered. "
+                        + "Register it with RuleWrightBuilder.RegisterValueFunction before loading the rule set.");
+                }
+
+                if (function is IRuleValueFunctionMetadata { RequiredOperandCount: int required }
+                    && call.Operands.Count != required)
+                {
+                    throw new RuleCompilationException(
+                        rule.Id,
+                        $"value function '{call.Name}' requires exactly {required} operand"
+                        + (required == 1 ? string.Empty : "s")
+                        + $", but the call supplies {call.Operands.Count}.");
+                }
+
+                foreach (ValueExpression operand in call.Operands)
+                {
+                    ValidateValueExpression(rule, operand);
+                }
+
+                break;
+        }
+    }
+
     private static void RequireOperand<TOperand>(Rule rule, ConditionLeaf leaf, string expected)
     {
         if (leaf.Value is TOperand)
@@ -481,7 +635,7 @@ public sealed class RuleWrightEngine
     {
         try
         {
-            _ = new System.Text.RegularExpressions.Regex((string)leaf.Value!, System.Text.RegularExpressions.RegexOptions.None, _regexTimeout);
+            _ = new System.Text.RegularExpressions.Regex((string)leaf.Value!, System.Text.RegularExpressions.RegexOptions.None, _services.RegexTimeout);
         }
         catch (ArgumentException ex)
         {

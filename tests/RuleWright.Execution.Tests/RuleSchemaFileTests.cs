@@ -49,6 +49,8 @@ public class RuleSchemaFileTests
         "literalExpression",
         "fieldExpression",
         "operatorExpression",
+        "callExpression",
+        "paramExpression",
     };
 
     /// <summary>Property names per schema definition, for the definitions that close their set.</summary>

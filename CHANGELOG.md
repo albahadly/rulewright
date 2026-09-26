@@ -9,6 +9,54 @@ in a minor version; each one is called out below.
 
 ### Added
 
+- **Microsoft RulesEngine feature parity, the pure-data way.** Six capabilities RulesEngine
+  users expect, each redesigned so rule documents stay a closed, validatable vocabulary —
+  anything that is *code* is registered on the builder and only *named* from the JSON
+  (usage.md §16 maps each RulesEngine concept to its RuleWright form):
+  - **Scoped params** (RulesEngine `GlobalParams`/`LocalParams`): `params` on a rule set
+    (global) or rule (local, shadowing) names a subexpression once; `{ "param": "name" }`
+    references it anywhere an expression is valid. References are inlined at load — cycles
+    and unknown names are pointer-addressed validation errors, and a param-authored document
+    hashes and compiles identically to its hand-inlined twin.
+  - **Value functions** (RulesEngine `CustomTypes` methods in lambdas):
+    `RegisterValueFunction(name, args => value)` plus the `{ "call": name, "operands": [...] }`
+    expression node, usable in action values, computed left-hand sides, and decision-table
+    cells. Bound at compile time; an unregistered name — or a wrong operand count when the
+    function declares one via `IRuleValueFunctionMetadata` — fails at `LoadRuleSet`.
+    Discoverable through `engine.RegisteredValueFunctions` / `engine.ValueFunctionCatalog`.
+  - **Custom actions** (RulesEngine custom action types): `RegisterAction(name, handler)`;
+    the handler's `RuleActionContext` carries the firing rule, branch, target, evaluated
+    value, fact, and read/write access to the running outputs, on both execution paths.
+    `engine.Validate`/`LoadRuleSet` fold registered names into the closed action vocabulary,
+    so misspellings are still caught (`RuleSetValidator.Validate` and `RuleSetParser.Parse`
+    gained overloads taking `RuleDocumentOptions`). Decision-table output columns may use
+    registered types too; `engine.RegisteredActions` lists them.
+  - **Failure messages** (RulesEngine `ErrorMessage`): a rule's `failureMessage` surfaces on
+    `RuleEvaluationResult.Failures` when the rule is evaluated and its condition does not
+    pass; skipped rules report nothing, and the message stays out of the content hash.
+  - **Named multi-fact evaluation** (RulesEngine `RuleParameter[]`):
+    `RuleFacts.With("customer", c).And("order", o)` evaluates several named facts as one,
+    each addressed by its name as the first path segment (interpreted path; a composite POCO
+    remains the compiled-path spelling).
+  - **Rule-set composition** (RulesEngine `WorkflowsToInject`): `RuleSet.Merge(sets, name,
+    stopAfterFirstMatch)` combines sets at load time with duplicate-id errors; documents stay
+    self-contained by design.
+  Also: four new examples (22–25), the JSON schema (`docs/schema/rule-schema.json`) extended
+  with `params`, `failureMessage`, and the `call`/`param` expression nodes, and README/usage
+  "coming from Microsoft RulesEngine" mapping tables. Free-form expression strings and
+  `EvaluateRule`-style forward chaining are deliberately not imported.
+- **Blazor builder support for the parity features.** A new **Function Call** value node
+  (`{ "call": … }`) with a name picker fed by the engine's registered value functions; the
+  Action node's type dropdown offers the engine's registered custom action types (and keeps an
+  imported document's unknown type instead of silently rewriting it, with an empty value field
+  meaning "send none" for custom types); a **Failure message** field on the Rule node
+  inspector; and documents that declare scoped `params` are loaded through the real parser —
+  which inlines the references, exactly as decision tables were already expanded — so the
+  canvas always shows what the engine runs. The sample's engine registers `RoundTo` and
+  `setIfHigher` (the same registrations `examples/README.md` documents), its Validate bridge
+  now folds registered custom action types into validation, and the engine-varying vocabulary
+  (`RegisteredActions`, `RegisteredValueFunctions`) is handed to the canvas at init.
+
 - **Case-insensitive JSON facts, opt-in.** `SystemTextJsonFacts.ToDictionary(element, keyComparer)`
   and `NewtonsoftJsonFacts.ToDictionary(token, keyComparer)` build every level of the fact with
   the given key comparer, and the interpreter looks each path segment up through it. Rule paths

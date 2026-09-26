@@ -1,0 +1,34 @@
+{
+  "name": "Failure messages",
+  "description": "A rule's 'failureMessage' is its authored explanation for saying no. When the rule is evaluated and its condition does not pass, the message appears on the result's Failures list (rule id + message). Skipped rules - disabled, or unreached after a stop-on-first-match - report nothing: a message means the rule was actually asked.",
+  "rules": [
+    {
+      "id": "senior-discount",
+      "failureMessage": "Customer must be at least 65 for the senior discount.",
+      "condition": { "field": "Customer.Age", "operator": "GreaterThanOrEqual", "value": 65 },
+      "actions": [
+        { "type": "setOutput", "target": "SeniorDiscount", "value": 15 }
+      ]
+    },
+    {
+      "id": "free-shipping",
+      "description": "An else branch and a failureMessage work together: the else actions apply AND the failure is explained.",
+      "failureMessage": "Order total is below the 200 free-shipping threshold.",
+      "condition": { "field": "Order.Total", "operator": "GreaterThanOrEqual", "value": 200 },
+      "actions": [
+        { "type": "setOutput", "target": "Shipping", "value": 0 }
+      ],
+      "else": [
+        { "type": "setOutput", "target": "Shipping", "value": 4.95 }
+      ]
+    },
+    {
+      "id": "adult",
+      "failureMessage": "Customer must be an adult.",
+      "condition": { "field": "Customer.Age", "operator": "GreaterThanOrEqual", "value": 18 },
+      "actions": [
+        { "type": "setOutput", "target": "Eligible", "value": true }
+      ]
+    }
+  ]
+}

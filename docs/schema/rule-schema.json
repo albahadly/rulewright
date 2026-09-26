@@ -51,6 +51,9 @@
           "default": "collect",
           "description": "'collect' (default): every matching row applies its actions in row order. 'first': only the first matching row (in row order) applies."
         },
+        "params": {
+          "$ref": "#/$defs/params"
+        },
         "inputs": {
           "type": "array",
           "minItems": 1,
@@ -174,6 +177,9 @@
           "default": false,
           "description": "When true, evaluation stops at the first rule whose condition passes; the default applies every matching rule. It is ORed with the caller's 'stopOnFirstMatch' evaluation option, and a 'first' hit-policy decision table expands into a rule set with it set."
         },
+        "params": {
+          "$ref": "#/$defs/params"
+        },
         "rules": {
           "type": "array",
           "items": {
@@ -226,6 +232,14 @@
             "$ref": "#/$defs/action"
           },
           "description": "Actions applied when the condition evaluates to false \u2014 the rule's 'else' branch. Same shape as 'actions'."
+        },
+        "failureMessage": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional authored explanation surfaced on the evaluation result (as a RuleFailure) when this rule is evaluated and its condition does not pass. Skipped rules (disabled, or unreached after a stop-on-first-match) report nothing. Like 'description', it never changes what the rule computes and is excluded from the rule content hash."
+        },
+        "params": {
+          "$ref": "#/$defs/params"
         },
         "layout": {
           "type": "object",
@@ -545,7 +559,7 @@
             "appendToOutput",
             "removeOutput"
           ],
-          "description": "How the action changes the result's outputs at 'target': 'setOutput' replaces, 'addToOutput' adds numerically (a running total across fired rules), 'appendToOutput' appends to a list (collected across fired rules), 'removeOutput' deletes the key. For the accumulators, a null value contributes nothing."
+          "description": "How the action changes the result's outputs at 'target': 'setOutput' replaces, 'addToOutput' adds numerically (a running total across fired rules), 'appendToOutput' appends to a list (collected across fired rules), 'removeOutput' deletes the key. For the accumulators, a null value contributes nothing. Engines may additionally register custom action types (RuleWrightBuilder.RegisterAction); a document using one validates through that engine's Validate/LoadRuleSet, which folds the registered names into this closed set."
         },
         "target": {
           "type": "string",
@@ -590,7 +604,7 @@
       "additionalProperties": false
     },
     "expression": {
-      "description": "An output value. Pure data \u2014 a closed operator vocabulary, never embedded code. A bare scalar is a constant; object nodes are { 'literal': <scalar> }, { 'field': '<dotted path>' }, or { 'op': '<operator>', 'operands': [ <expression>, ... ] }. Operand order is significant for subtract, divide, and modulo.",
+      "description": "An output value. Pure data - a closed operator vocabulary, never embedded code. A bare scalar is a constant; object nodes are { 'literal': <scalar> }, { 'field': '<dotted path>' }, { 'op': '<operator>', 'operands': [ <expression>, ... ] }, { 'call': '<registered value function>', 'operands': [ <expression>, ... ] }, or { 'param': '<name>' } (a reference to a scoped param in scope). Operand order is significant for subtract, divide, and modulo.",
       "oneOf": [
         {
           "type": [
@@ -608,6 +622,12 @@
         },
         {
           "$ref": "#/$defs/operatorExpression"
+        },
+        {
+          "$ref": "#/$defs/callExpression"
+        },
+        {
+          "$ref": "#/$defs/paramExpression"
         }
       ]
     },
@@ -766,6 +786,41 @@
           }
         }
       ]
+    },
+    "callExpression": {
+      "type": "object",
+      "properties": {
+        "call": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The case-sensitive name of a value function registered on the engine (RuleWrightBuilder.RegisterValueFunction). The document names the function; the behaviour stays registered C# code, and an unregistered name fails at load."
+        },
+        "operands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "description": "Argument expressions, in document order. Optional: omitted means a no-argument call. A function that declares a required operand count gets calls arity-checked at load."
+        }
+      },
+      "required": [
+        "call"
+      ],
+      "additionalProperties": false
+    },
+    "paramExpression": {
+      "type": "object",
+      "properties": {
+        "param": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A reference to a scoped param defined in the rule's 'params' or the rule set's 'params' (local shadows global). Not valid inside a quantifier's per-element condition, where field paths resolve against the element rather than the root fact."
+        }
+      },
+      "required": [
+        "param"
+      ],
+      "additionalProperties": false
     }
   }
 }

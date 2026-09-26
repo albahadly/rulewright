@@ -56,6 +56,49 @@ public sealed class RuleSet
         StopAfterFirstMatch = stopAfterFirstMatch;
     }
 
+    /// <summary>
+    /// Composes several rule sets into one — RuleWright's equivalent of workflow injection.
+    /// Rules keep their source order (set by set), and the usual per-set invariants apply to
+    /// the merged whole: rule ids must be unique across <em>all</em> the sets, so two sets
+    /// that each define a <c>vip-discount</c> fail loudly here rather than silently shadowing
+    /// each other. Composition is a load-time concern by design: rule <em>documents</em> stay
+    /// self-contained, with no include or reference mechanism to resolve.
+    /// </summary>
+    /// <param name="sets">The rule sets to merge, in order.</param>
+    /// <param name="name">Optional display name for the merged set.</param>
+    /// <param name="stopAfterFirstMatch">
+    /// The merged set's own stop-after-first-match semantics. Deliberately not inherited from
+    /// the sources: what "first match" means across combined sets is the composer's decision.
+    /// </param>
+    /// <exception cref="ArgumentNullException"><paramref name="sets"/> is null or contains null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="sets"/> is empty, or two sets share a rule id.</exception>
+    public static RuleSet Merge(IEnumerable<RuleSet> sets, string? name = null, bool stopAfterFirstMatch = false)
+    {
+        if (sets is null)
+        {
+            throw new ArgumentNullException(nameof(sets));
+        }
+
+        RuleSet[] materialized = sets.ToArray();
+        if (materialized.Length == 0)
+        {
+            throw new ArgumentException("Merge requires at least one rule set.", nameof(sets));
+        }
+
+        if (materialized.Any(s => s is null))
+        {
+            throw new ArgumentNullException(nameof(sets), "Rule sets must not contain null.");
+        }
+
+        var rules = new List<Rule>();
+        foreach (RuleSet set in materialized)
+        {
+            rules.AddRange(set.Rules);
+        }
+
+        return new RuleSet(rules, name, stopAfterFirstMatch);
+    }
+
     /// <summary>Optional display name.</summary>
     public string? Name { get; }
 
