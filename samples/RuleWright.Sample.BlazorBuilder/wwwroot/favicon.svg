@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#4338ca"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <!-- the condition: a decision diamond -->
+  <path d="M128 34 178 84 128 134 78 84z" fill="#fff"/>
+  <path d="M108 84h40" stroke="#6d28d9" stroke-width="12" stroke-linecap="round"/>
+  <!-- the two branches: then / else -->
+  <path d="M128 134v22M128 156H80v24M128 156h48v24" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="50" y="180" width="60" height="38" rx="10" fill="#ddd6fe"/>
+  <rect x="146" y="180" width="60" height="38" rx="10" fill="#fff"/>
+</svg>
