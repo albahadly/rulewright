@@ -31,7 +31,8 @@ window.rulewrightFlowBuilder = (function(){
     action:    { label:"Action",          badge:"▣",   color:"var(--accent-green)",  tagPrefix:"ACT", hasInput:true,  isAction:true,  portLabels:["Rule","Value (expr)"] },
     valLiteral:{ label:"Literal",         badge:"\"…\"",color:"var(--accent-purple)", tagPrefix:"LIT", hasInput:false, isAction:false, isValue:true },
     valField:  { label:"Field Ref",       badge:"{f}", color:"var(--accent-purple)", tagPrefix:"FLD", hasInput:false, isAction:false, isValue:true },
-    valOp:     { label:"Expression",      badge:"ƒx",  color:"var(--accent-purple)", tagPrefix:"EXP", hasInput:true,  isAction:false, dynamicInput:true, dynamicLabel:"Operand", isValue:true }
+    valOp:     { label:"Expression",      badge:"ƒx",  color:"var(--accent-purple)", tagPrefix:"EXP", hasInput:true,  isAction:false, dynamicInput:true, dynamicLabel:"Operand", isValue:true },
+    valCall:   { label:"Function Call",   badge:"ƒ()", color:"var(--accent-purple)", tagPrefix:"CALL",hasInput:true,  isAction:false, dynamicInput:true, dynamicLabel:"Operand", isValue:true }
   };
 
   const OPERATORS = [
@@ -73,6 +74,12 @@ window.rulewrightFlowBuilder = (function(){
 
   let dotNetRef = null;
   let canvasWrap, world, wiresSvg, toastEl, resultBanner;
+
+  // The engine-registered vocabulary (custom action types, call value functions), handed over
+  // by C# at init. The fixed vocabulary stays in the literal arrays above, which tests hold
+  // against RuleSchemaCatalog; these two legitimately vary per engine.
+  let engineActions = [];
+  let engineValueFunctions = [];
 
   /* ============================================================
      Utility
@@ -178,7 +185,7 @@ window.rulewrightFlowBuilder = (function(){
   }
 
   function defaultConfig(type){
-    if(type === 'rule') return { id:"", description:"", priority:0, enabled:true };
+    if(type === 'rule') return { id:"", description:"", priority:0, enabled:true, failureMessage:"" };
     if(type === 'leaf') return { field:"", operator:"GreaterThan", value:"" };
     if(type === 'function') return { name:"", field:"", value:"" };
     if(type === 'quant') return { field:"", operator:"Any" };
@@ -186,6 +193,7 @@ window.rulewrightFlowBuilder = (function(){
     if(type === 'valLiteral') return { value:"null" };
     if(type === 'valField') return { field:"" };
     if(type === 'valOp') return { operator:"add" };
+    if(type === 'valCall') return { name:"" };
     return {};
   }
 
@@ -315,6 +323,11 @@ window.rulewrightFlowBuilder = (function(){
     if(t === 'valOp'){
       return `<span class="summary">${escapeHtml(node.config.operator)}(…)</span>`;
     }
+    if(t === 'valCall'){
+      return node.config.name
+        ? `<span class="summary">ƒ ${escapeHtml(node.config.name)}(…)</span>`
+        : `<span class="placeholder">Click to configure…</span>`;
+    }
     return `<span class="placeholder" style="font-size:9.5px;">Combines connected inputs</span>`;
   }
 
@@ -367,7 +380,7 @@ window.rulewrightFlowBuilder = (function(){
     if(!node) return null;
     const t = node.type;
     if(t === 'rule') return 'rule';
-    if(t === 'valLiteral' || t === 'valField' || t === 'valOp') return 'value';
+    if(t === 'valLiteral' || t === 'valField' || t === 'valOp' || t === 'valCall') return 'value';
     if(t === 'leaf' || t === 'function' || t === 'quant' || t === 'and' || t === 'or' || t === 'not') return 'condition';
     return null; // trigger — reference-only, has no output port
   }
@@ -378,12 +391,12 @@ window.rulewrightFlowBuilder = (function(){
     if(t === 'quant') return 'condition';               // the per-element condition
     if(t === 'action') return idx === 0 ? 'rule' : 'value';
     if(t === 'and' || t === 'or' || t === 'not') return 'condition';
-    if(t === 'valOp') return 'value';                   // operand pins
+    if(t === 'valOp' || t === 'valCall') return 'value'; // operand pins
     return null;
   }
   const KIND_LABEL = {
     condition: "a condition (Compare, Custom Function, or a logic group)",
-    value: "a computed value (Literal, Field Ref, or Expression)",
+    value: "a computed value (Literal, Field Ref, Expression, or Function Call)",
     rule: "a Rule node"
   };
 
@@ -590,7 +603,8 @@ window.rulewrightFlowBuilder = (function(){
           <div class="field"><label>Priority</label><input type="number" id="ruleCfgPriority" value="${Number(node.config.priority)||0}"></div>
           <div class="field" style="flex:0 0 auto;padding-top:22px;"><div class="checkbox-row"><input type="checkbox" id="ruleCfgEnabled" ${node.config.enabled!==false?'checked':''}> Enabled</div></div>
         </div>
-        <div class="insp-note">Wire a condition into the <strong>Condition</strong> pin, and one or more Action nodes to this rule's output. Higher priority evaluates first and wins output collisions.</div>`;
+        <div class="field"><label>Failure message (optional)</label><input type="text" id="ruleCfgFailureMessage" placeholder="Customer must be an adult." value="${escapeHtml(node.config.failureMessage||'')}"></div>
+        <div class="insp-note">Wire a condition into the <strong>Condition</strong> pin, and one or more Action nodes to this rule's output. Higher priority evaluates first and wins output collisions. A failure message is reported on the result when the rule is evaluated and its condition does not pass.</div>`;
     } else if(node.type === 'leaf'){
       const fieldExprWired = !!node.inputs[0];
       html += `<div class="field"><label>Field path</label>
@@ -613,7 +627,8 @@ window.rulewrightFlowBuilder = (function(){
         <div class="insp-note">Registered via <code>IRuleFunction</code> on the host application. The built-in RuleWright.Extensions.Functions catalog is registered for Test rule.</div>`;
     } else if(node.type === 'action'){
       const valueWired = !!node.inputs[1];
-      html += `<div class="field"><label>Action type</label><select id="cfgType">${ACTION_TYPES.map(t=>`<option value="${t}" ${t===node.config.type?'selected':''}>${t}</option>`).join('')}</select></div>
+      const actionChoices = actionTypeChoices(node.config.type);
+      html += `<div class="field"><label>Action type</label><select id="cfgType">${actionChoices.map(t=>`<option value="${t}" ${t===node.config.type?'selected':''}>${escapeHtml(t)}</option>`).join('')}</select></div>
         <div class="field"><label>Branch</label><select id="cfgBranch">
           <option value="then" ${node.config.branch!=='else'?'selected':''}>Then (condition is true)</option>
           <option value="else" ${node.config.branch==='else'?'selected':''}>Else (condition is false)</option>
@@ -623,6 +638,9 @@ window.rulewrightFlowBuilder = (function(){
         html += `<div class="field" id="valueFieldWrap"><label>Value (constant)</label><input type="text" id="cfgValue" placeholder="10" value="${escapeHtml(node.config.value)}" ${valueWired?'disabled':''}></div>`;
         if(valueWired){
           html += `<div class="insp-note">Using the wired <strong>Value (expr)</strong> computed value instead — disconnect that pin to type a constant.</div>`;
+        }
+        if(isEngineAction(node.config.type)){
+          html += `<div class="insp-note">A custom action type registered on the engine (<code>RegisterAction</code>). Its value is optional — leave the field empty to send none.</div>`;
         }
       } else {
         html += `<div class="insp-note">removeOutput takes no value — it just deletes the target key.</div>`;
@@ -636,6 +654,12 @@ window.rulewrightFlowBuilder = (function(){
       const arity = EXPR_ARITY[node.config.operator];
       html += `<div class="field"><label>Operator</label><select id="cfgOperator">${EXPR_OPERATORS.map(o=>`<option value="${o}" ${o===node.config.operator?'selected':''}>${o}</option>`).join('')}</select></div>
         <div class="insp-note">${arity ? `Takes exactly ${arity.min} operand${arity.min===1?'':'s'}.` : 'Takes two or more operands.'} Wire Literal/Field Ref/Expression nodes into the operand pins below.</div>`;
+    } else if(node.type === 'valCall'){
+      const datalist = engineValueFunctions.length
+        ? `<datalist id="valueFnList">${engineValueFunctions.map(f=>`<option value="${escapeHtml(f)}"></option>`).join('')}</datalist>`
+        : '';
+      html += `<div class="field"><label>Value function name</label><input type="text" id="cfgName" list="valueFnList" placeholder="RoundTo" value="${escapeHtml(node.config.name)}">${datalist}</div>
+        <div class="insp-note">Calls a value function registered on the engine (<code>RegisterValueFunction</code>) with the operands wired below, in pin order. An unregistered name fails at load.${engineValueFunctions.length ? ' Registered here: ' + engineValueFunctions.map(f=>'<code>'+escapeHtml(f)+'</code>').join(', ') + '.' : ''}</div>`;
     }
 
     body.innerHTML = html;
@@ -654,6 +678,7 @@ window.rulewrightFlowBuilder = (function(){
       document.getElementById('ruleCfgDesc').addEventListener('input', (e)=>{ node.config.description=e.target.value; regenerateJson(); });
       document.getElementById('ruleCfgPriority').addEventListener('input', (e)=>{ node.config.priority=e.target.value; renderNode(node); regenerateJson(); });
       document.getElementById('ruleCfgEnabled').addEventListener('change', (e)=>{ node.config.enabled=e.target.checked; renderNode(node); regenerateJson(); });
+      document.getElementById('ruleCfgFailureMessage').addEventListener('input', (e)=>{ node.config.failureMessage=e.target.value; regenerateJson(); });
     }
     if(node.type === 'leaf'){
       const fEl = document.getElementById('cfgField');
@@ -699,6 +724,21 @@ window.rulewrightFlowBuilder = (function(){
         renderNode(node); regenerateJson();
       });
     }
+    if(node.type === 'valCall'){
+      document.getElementById('cfgName').addEventListener('input', (e)=>{ node.config.name=e.target.value; renderNode(node); regenerateJson(); });
+    }
+  }
+
+  // The action-type dropdown: the built-ins, the engine's registered custom actions, and —
+  // so an imported document naming a type this engine lacks isn't silently rewritten — the
+  // node's current type even when it is neither.
+  function actionTypeChoices(current){
+    const choices = [...ACTION_TYPES, ...engineActions.filter(a=>!ACTION_TYPES.includes(a))];
+    if(current && !choices.includes(current)) choices.push(current);
+    return choices;
+  }
+  function isEngineAction(type){
+    return engineActions.includes(type) && !ACTION_TYPES.includes(type);
   }
 
   /* ============================================================
@@ -870,6 +910,18 @@ window.rulewrightFlowBuilder = (function(){
       }).filter(Boolean);
       return { op: node.config.operator, operands };
     }
+    if(node.type === 'valCall'){
+      if(!node.config.name) warnings.push(`${node.tag}: missing value function name`);
+      const callConns = node.inputs.filter(Boolean);
+      const callOperands = callConns.map(connId=>{
+        const conn = state.connections.get(connId);
+        return buildValueExpressionTree(conn.from, warnings, seen);
+      }).filter(Boolean);
+      // A no-argument call is legal, so unlike an Expression node this emits without operands.
+      const call = { call: node.config.name || "" };
+      if(callOperands.length > 0) call.operands = callOperands;
+      return call;
+    }
     warnings.push(`A ${node.tag} node can't be used as a computed value here.`);
     return null;
   }
@@ -987,6 +1039,9 @@ window.rulewrightFlowBuilder = (function(){
             const conn = state.connections.get(valueExprConn);
             const expr = buildValueExpressionTree(conn.from, warnings, new Set());
             entry.value = expr !== null ? expr : parseValue(a.config.value);
+          } else if(isEngineAction(entry.type) && String(a.config.value ?? "") === ""){
+            // A registered custom action decides for itself whether it needs a value; an empty
+            // field means "send none" rather than an empty-string constant.
           } else {
             entry.value = parseValue(a.config.value);
           }
@@ -1001,6 +1056,7 @@ window.rulewrightFlowBuilder = (function(){
         description: cfg.description || undefined,
         priority: Number(cfg.priority) || 0,
         enabled: cfg.enabled !== false,
+        failureMessage: cfg.failureMessage || undefined,
         condition: condBuilt ? condBuilt.json : { field:"", operator:"IsNotNull" },
         actions
       };
@@ -1522,6 +1578,15 @@ window.rulewrightFlowBuilder = (function(){
       });
       return n;
     }
+    if('call' in expr){
+      const n = createNode('valCall', 0, 0);
+      n.config.name = expr.call || '';
+      (expr.operands || []).forEach((operand, i)=>{
+        const child = importValueExpr(operand);
+        addConnection(child.id, n.id, i);
+      });
+      return n;
+    }
     const n = createNode('valLiteral', 0, 0);
     n.config.value = 'null';
     return n;
@@ -1572,6 +1637,7 @@ window.rulewrightFlowBuilder = (function(){
     rn.config.description = rule.description || '';
     rn.config.priority = rule.priority || 0;
     rn.config.enabled = rule.enabled !== false;
+    rn.config.failureMessage = rule.failureMessage || '';
 
     if(rule.condition){
       const root = importCondition(rule.condition);
@@ -1625,6 +1691,11 @@ window.rulewrightFlowBuilder = (function(){
     return { name: resp.name, stopAfterFirstMatch: resp.stopAfterFirstMatch, rules: resp.rules };
   }
 
+  function declaresParams(doc){
+    if(doc && doc.params) return true;
+    return Array.isArray(doc && doc.rules) && doc.rules.some(r=>r && r.params);
+  }
+
   async function loadDocIntoCanvas(doc, sourceLabel){
     const label = sourceLabel ? ` from ${sourceLabel}` : '';
     if(!doc || typeof doc !== 'object' || Array.isArray(doc)){
@@ -1653,6 +1724,23 @@ window.rulewrightFlowBuilder = (function(){
         rules: expanded.rules,
       });
       showToast(`Expanded a decision table into ${expanded.rules.length} rule${expanded.rules.length===1?'':'s'}${label}.`, 'success');
+      return true;
+    }
+
+    // Scoped params are an authoring form the engine inlines at load, exactly as it expands a
+    // decision table — so a document that declares any is normalized by the REAL parser and the
+    // canvas renders the inlined rules the engine would actually run.
+    if(declaresParams(doc)){
+      const expanded = await expandDocument(doc);
+      if(!expanded || !expanded.rules || expanded.rules.length === 0){
+        return false;
+      }
+      importDocument({
+        name: expanded.name || doc.name || '',
+        stopAfterFirstMatch: expanded.stopAfterFirstMatch,
+        rules: expanded.rules,
+      });
+      showToast(`Loaded ${expanded.rules.length} rule${expanded.rules.length===1?'':'s'}${label} — scoped params inlined, as the engine loads them.`, 'success');
       return true;
     }
     importDocument(doc);
@@ -1796,8 +1884,10 @@ window.rulewrightFlowBuilder = (function(){
   /* ============================================================
      Public init
      ============================================================ */
-  function init(reference){
+  function init(reference, vocabulary){
     dotNetRef = reference;
+    engineActions = (vocabulary && vocabulary.customActions) || [];
+    engineValueFunctions = (vocabulary && vocabulary.valueFunctions) || [];
     canvasWrap = document.getElementById('canvasWrap');
     world = document.getElementById('world');
     wiresSvg = document.getElementById('wiresSvg');

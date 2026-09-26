@@ -44,9 +44,18 @@ in a minor version; each one is called out below.
   Also: four new examples (22–25), the JSON schema (`docs/schema/rule-schema.json`) extended
   with `params`, `failureMessage`, and the `call`/`param` expression nodes, and README/usage
   "coming from Microsoft RulesEngine" mapping tables. Free-form expression strings and
-  `EvaluateRule`-style forward chaining are deliberately not imported. Known limitation: the
-  Blazor builder canvas does not yet render `param`/`call` nodes, `params` blocks, or custom
-  action types (its example manifest says so per file); extending the canvas is follow-up work.
+  `EvaluateRule`-style forward chaining are deliberately not imported.
+- **Blazor builder support for the parity features.** A new **Function Call** value node
+  (`{ "call": … }`) with a name picker fed by the engine's registered value functions; the
+  Action node's type dropdown offers the engine's registered custom action types (and keeps an
+  imported document's unknown type instead of silently rewriting it, with an empty value field
+  meaning "send none" for custom types); a **Failure message** field on the Rule node
+  inspector; and documents that declare scoped `params` are loaded through the real parser —
+  which inlines the references, exactly as decision tables were already expanded — so the
+  canvas always shows what the engine runs. The sample's engine registers `RoundTo` and
+  `setIfHigher` (the same registrations `examples/README.md` documents), its Validate bridge
+  now folds registered custom action types into validation, and the engine-varying vocabulary
+  (`RegisteredActions`, `RegisteredValueFunctions`) is handed to the canvas at init.
 
 - **Case-insensitive JSON facts, opt-in.** `SystemTextJsonFacts.ToDictionary(element, keyComparer)`
   and `NewtonsoftJsonFacts.ToDictionary(token, keyComparer)` build every level of the fact with
