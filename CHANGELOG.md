@@ -25,6 +25,9 @@ in a minor version; each one is called out below.
 - `usage.md` §1 and §2 evaluated rules reading `Order.Total` against facts with no `Order` member
   (the first threw `RuleCompilationException`, the second silently never fired). Both now use a
   `Checkout { Customer, Order }` fact.
+- The Blazor builder's test-result banner could not be dismissed: it kept `pointer-events: none`
+  while shown, so clicks on its × fell through to the canvas. It now takes clicks while shown and
+  still lets them through once hidden.
 
 ## [0.3.0]
 
