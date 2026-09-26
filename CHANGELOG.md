@@ -19,12 +19,19 @@ in a minor version; each one is called out below.
   treats as the same key (`"Total"` and `"total"`) throw `ArgumentException` instead of one
   replacing the other. The one-argument overloads are unchanged: keys still match exactly.
   The ASP.NET Core sample now converts its request body this way.
+- **A package icon.** Every `RuleWright.*` package carries `icon.png` (`eng/icon.png`, rendered
+  from `eng/icon.svg`), so NuGet.org and IDE package managers show the RuleWright mark: the
+  documentation site's decision diamond branching to two outcomes, redrawn with heavier strokes
+  to stay legible at small sizes.
 
 ### Fixed
 
 - `usage.md` §1 and §2 evaluated rules reading `Order.Total` against facts with no `Order` member
   (the first threw `RuleCompilationException`, the second silently never fired). Both now use a
   `Checkout { Customer, Order }` fact.
+- The Blazor builder's test-result banner could not be dismissed: it kept `pointer-events: none`
+  while shown, so clicks on its × fell through to the canvas. It now takes clicks while shown and
+  still lets them through once hidden.
 
 ## [0.3.0]
 

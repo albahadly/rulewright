@@ -129,14 +129,9 @@ input,select,textarea{font-family:var(--font-mono);}
     gap:10px;
 }
 .brand-mark{
-    width:26px;height:26px;
-    border-radius:5px;
-    background:linear-gradient(135deg,var(--accent-copper),var(--accent-copper-dim));
-    display:flex;align-items:center;justify-content:center;
-    font-family:var(--font-mono);
-    font-weight:700;
-    font-size:13px;
-    color:#1a1108;
+    /* The package icon (eng/icon.svg), so the builder, NuGet.org and the docs site share one mark. */
+    width:28px;height:28px;
+    display:block;
     flex-shrink:0;
 }
 .brand-text{display:flex;flex-direction:column;line-height:1.1;}
@@ -327,10 +322,10 @@ svg.wires{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;}
     z-index:30;
     display:flex;align-items:center;gap:8px;
 }
-.result-banner.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.result-banner.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
 .result-banner.pass{border-color:var(--accent-green);color:var(--accent-green);}
 .result-banner.fail{border-color:var(--accent-red);color:var(--accent-red);}
-.result-banner .rb-close{margin-left:6px;color:var(--text-faint);background:none;border:none;font-size:13px;}
+.result-banner .rb-close{margin-left:6px;color:var(--text-faint);background:none;border:none;font-size:13px;cursor:pointer;}
 
 /* ===== Inspector (right) ===== */
 .inspector{
