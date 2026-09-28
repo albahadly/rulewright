@@ -9,6 +9,14 @@ gh variable set CI_RUNNER --body cloud --repo albahadly/rulewright   # GitHub-ho
 gh variable delete CI_RUNNER --repo albahadly/rulewright             # unset = cloud
 ```
 
+**Branches.** Work happens on `dev`; `main` is the pull-request target. `ci.yml` fires on a push
+to `main`, on a pull request and by hand, so **a push to `dev` runs no CI**: open a pull request
+from `dev`, or run it on the branch with `gh workflow run ci.yml --ref dev --repo albahadly/rulewright`.
+The Pages site (`blazor-builder-pages.yml`) deploys only from `main`, so it ships on merge.
+`main` accepts changes only through a pull request: the ruleset *main: pull requests only* (no
+bypass, not even for admins) also blocks force-pushes and deleting it, and the clone's
+`.git/hooks/pre-push` refuses a push to `main` before anything is sent.
+
 A single run can override it: **Actions → CI → Run workflow → runner** (`default` follows the
 variable). `publish-nuget.yml` and `blazor-builder-pages.yml` always run in the cloud.
 
