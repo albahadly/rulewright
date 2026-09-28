@@ -1,5 +1,11 @@
 # RuleWright
 
+[![NuGet](https://img.shields.io/nuget/v/RuleWright?logo=nuget&label=NuGet&color=004880)](https://www.nuget.org/packages/RuleWright)
+[![Downloads](https://img.shields.io/nuget/dt/RuleWright?label=downloads&color=004880)](https://www.nuget.org/packages/RuleWright)
+[![Documentation](https://img.shields.io/badge/docs-docs.albahadly.com-4f46e5)](https://docs.albahadly.com/rulewright/)
+[![.NET](https://img.shields.io/badge/.NET-Framework%204.8%20%7C%20Standard%202.0%20%7C%208%20%7C%2010-512BD4)](https://docs.albahadly.com/rulewright/get-started/packages.html#target-frameworks)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2ea44f)](https://docs.albahadly.com/rulewright/reference/licences.html)
+
 A high-performance, JSON-driven business rule engine for .NET. Rules are plain JSON
 documents; evaluation is compiled expression trees — parse once, compile once, execute
 millions of times.
