@@ -68,6 +68,17 @@ up in `engine.FunctionCatalog` for a rule-builder UI to render.
 
 .NET Framework 4.8, .NET Standard 2.0, .NET 8.0 or .NET 10.0.
 
+## Documentation
+
+📖 [RuleWright documentation](https://docs.albahadly.com/rulewright/) ·
+[Custom functions](https://docs.albahadly.com/rulewright/guides/extending/custom-functions.html) ·
+[API reference: `RuleWright.Extensions.Functions`](https://docs.albahadly.com/rulewright/api/RuleWright.Extensions.Functions.html)
+
+## Contact
+
+Questions, support or licensing: [salwan@albahadly.com](mailto:salwan@albahadly.com) ·
+[www.albahadly.com](https://www.albahadly.com/)
+
 ## License
 
 MIT.

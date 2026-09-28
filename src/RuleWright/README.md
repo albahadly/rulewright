@@ -105,6 +105,18 @@ which path ran via `CompilationMode`, so a fallback is never silent.
 NativeAOT: the compiled path uses `Expression.Compile`, which NativeAOT does not support.
 Use dictionary facts there — the engine reports `CompilationMode.Interpreted`.
 
+## Documentation
+
+📖 [RuleWright documentation](https://docs.albahadly.com/rulewright/) ·
+[Get started](https://docs.albahadly.com/rulewright/get-started/index.html) ·
+[Choose your packages](https://docs.albahadly.com/rulewright/get-started/packages.html) ·
+[API reference](https://docs.albahadly.com/rulewright/api/RuleWright.html)
+
+## Contact
+
+Questions, support or licensing: [salwan@albahadly.com](mailto:salwan@albahadly.com) ·
+[www.albahadly.com](https://www.albahadly.com/)
+
 ## License
 
 MIT.
