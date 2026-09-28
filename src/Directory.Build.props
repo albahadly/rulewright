@@ -19,7 +19,7 @@
     <VersionPrefix>0.3.0</VersionPrefix>
     <RepositoryUrl>https://github.com/albahadly/rulewright</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageProjectUrl>https://github.com/albahadly/rulewright</PackageProjectUrl>
+    <PackageProjectUrl>https://www.albahadly.com/</PackageProjectUrl>
     <PackageTags>rules-engine;business-rules;json;expression-trees;decision-table;netstandard2.0</PackageTags>
     <PackageReleaseNotes>See https://github.com/albahadly/rulewright/releases for release notes.</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
