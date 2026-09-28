@@ -18,7 +18,9 @@ bypass, not even for admins) also blocks force-pushes and deleting it, and the c
 `.git/hooks/pre-push` refuses a push to `main` before anything is sent.
 
 A single run can override it: **Actions → CI → Run workflow → runner** (`default` follows the
-variable). `publish-nuget.yml` and `blazor-builder-pages.yml` always run in the cloud.
+variable). `publish-nuget.yml` follows the same switch (Linux runner only) and has the same
+`runner` input; it is started only by a maintainer, never by a fork. `blazor-builder-pages.yml`
+always runs in the cloud.
 
 | Job | `cloud` | `local` |
 |---|---|---|

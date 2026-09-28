@@ -17,6 +17,12 @@ name: Publish to NuGet
 #   Repository Owner: albahadly   Repository: rulewright   Workflow File: publish-nuget.yml
 # plus a NUGET_USER repository secret holding the nuget.org profile name (not
 # email) to authenticate as. No NUGET_API_KEY secret is used or needed.
+#
+# WHERE THIS RUNS: the same switch as ci.yml (.github/workflows/RUNNERS.md). CI_RUNNER=local runs it
+# on the self-hosted Linux runner, anything else on ubuntu-latest; the `runner` input overrides that
+# for one run. Only a maintainer can start this workflow (a tag push or a manual run), never a fork,
+# so the self-hosted runner is safe here. OIDC works the same on it: the token names this repository
+# and workflow file, not the machine. With no Linux runner online the job waits in the queue.
 
 on:
   push:
@@ -32,6 +38,11 @@ on:
         description: 'Exact version to publish (e.g. 0.1.1). Leave empty to use the odometer. Set this to finish a partially-published release: --skip-duplicate makes re-pushing the packages that already landed a no-op.'
         required: false
         default: ""
+      runner:
+        description: Where to run. 'default' follows the CI_RUNNER repository variable.
+        type: choice
+        options: [default, cloud, local]
+        default: default
 
 permissions:
   contents: read
@@ -40,7 +51,7 @@ permissions:
 jobs:
   publish:
     name: Pack and push RuleWright.* to nuget.org
-    runs-on: ubuntu-latest
+    runs-on: ${{ ((inputs.runner != 'default' && inputs.runner) || vars.CI_RUNNER || 'cloud') == 'local' && fromJSON('["self-hosted","linux"]') || 'ubuntu-latest' }}
     # A manual run has to say so in as many words. A tag push is already deliberate.
     if: >
       github.event_name == 'push' ||
@@ -49,6 +60,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-dotnet@v4
+        # A self-hosted runner uses the machine's own SDK and runtimes (RUNNERS.md).
+        if: runner.environment != 'self-hosted'
         with:
           dotnet-version: |
             8.0.x
