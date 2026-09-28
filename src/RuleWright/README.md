@@ -104,6 +104,17 @@ which path ran via `CompilationMode`, so a fallback is never silent.
 | [`RuleWright.Serialization`](https://www.nuget.org/packages/RuleWright.Serialization) | Validate or hash rule documents without evaluating them. |
 | [`RuleWright.Core`](https://www.nuget.org/packages/RuleWright.Core) | Reference the domain model alone. Zero dependencies. |
 
+## Documentation
+
+| | |
+|---|---|
+| [Get started](https://docs.albahadly.com/rulewright/get-started/index.html) | Install, your first rule, facts, error handling |
+| [Tutorials](https://docs.albahadly.com/rulewright/tutorials/index.html) | A checkout pricing policy, fraud scoring, a rules web API, testing rule documents, the visual builder |
+| [Guides](https://docs.albahadly.com/rulewright/guides/index.html) | Writing rules, extending the engine, running in production |
+| [API reference](https://docs.albahadly.com/rulewright/api/RuleWright.html) | Every public type and member |
+
+Every code example in the documentation is compiled and run, and its output shown.
+
 ## Requirements
 
 .NET Framework 4.8, .NET Standard 2.0, .NET 8.0 or .NET 10.0.
@@ -111,17 +122,13 @@ which path ran via `CompilationMode`, so a fallback is never silent.
 NativeAOT: the compiled path uses `Expression.Compile`, which NativeAOT does not support.
 Use dictionary facts there — the engine reports `CompilationMode.Interpreted`.
 
-## Documentation
+## Support and contact
 
-📖 [RuleWright documentation](https://docs.albahadly.com/rulewright/) ·
-[Get started](https://docs.albahadly.com/rulewright/get-started/index.html) ·
-[Choose your packages](https://docs.albahadly.com/rulewright/get-started/packages.html) ·
-[API reference](https://docs.albahadly.com/rulewright/api/RuleWright.html)
+Questions, feedback, support or licensing enquiries:
 
-## Contact
-
-Questions, support or licensing: [salwan@albahadly.com](mailto:salwan@albahadly.com) ·
-[www.albahadly.com](https://www.albahadly.com/)
+- ✉️ **Email:** [salwan@albahadly.com](mailto:salwan@albahadly.com)
+- 🌐 **Website:** [www.albahadly.com](https://www.albahadly.com/)
+- 📖 **Documentation:** [docs.albahadly.com/rulewright](https://docs.albahadly.com/rulewright/)
 
 ## License
 
