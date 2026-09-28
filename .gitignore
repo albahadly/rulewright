@@ -30,3 +30,7 @@ packages/
 # OS
 Thumbs.db
 .DS_Store
+
+# Local code-navigation indexes (CodeGraph, Serena); never committed.
+.codegraph/
+.serena/
