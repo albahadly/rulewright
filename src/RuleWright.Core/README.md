@@ -52,6 +52,17 @@ delegates or the interpreter, so a fallback is never silent.
 
 .NET Framework 4.8, .NET Standard 2.0, .NET 8.0 or .NET 10.0.
 
+## Documentation
+
+📖 [RuleWright documentation](https://docs.albahadly.com/rulewright/) ·
+[How RuleWright works](https://docs.albahadly.com/rulewright/concepts/architecture.html) ·
+[API reference: `RuleWright.Core`](https://docs.albahadly.com/rulewright/api/RuleWright.Core.html)
+
+## Contact
+
+Questions, support or licensing: [salwan@albahadly.com](mailto:salwan@albahadly.com) ·
+[www.albahadly.com](https://www.albahadly.com/)
+
 ## License
 
 MIT.

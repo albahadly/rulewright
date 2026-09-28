@@ -62,6 +62,17 @@ throw `ArgumentException` rather than one silently replacing the other.
 
 .NET Framework 4.8, .NET Standard 2.0, .NET 8.0 or .NET 10.0. Depends on Newtonsoft.Json 13.
 
+## Documentation
+
+📖 [RuleWright documentation](https://docs.albahadly.com/rulewright/) ·
+[JSON adapters](https://docs.albahadly.com/rulewright/guides/extending/json-adapters.html) ·
+[API reference: `RuleWright.Json.NewtonsoftJson`](https://docs.albahadly.com/rulewright/api/RuleWright.Json.NewtonsoftJson.html)
+
+## Contact
+
+Questions, support or licensing: [salwan@albahadly.com](mailto:salwan@albahadly.com) ·
+[www.albahadly.com](https://www.albahadly.com/)
+
 ## License
 
 MIT.

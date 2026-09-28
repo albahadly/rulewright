@@ -78,6 +78,17 @@ catastrophic backtracking pin a thread. Change the bound with
 NativeAOT: the compiled path uses `Expression.Compile`, which NativeAOT does not support. Use
 dictionary facts there — the engine reports `CompilationMode.Interpreted`.
 
+## Documentation
+
+📖 [RuleWright documentation](https://docs.albahadly.com/rulewright/) ·
+[Host and reload rules](https://docs.albahadly.com/rulewright/guides/operating/hosting.html) ·
+[API reference: `RuleWright.Execution`](https://docs.albahadly.com/rulewright/api/RuleWright.Execution.html)
+
+## Contact
+
+Questions, support or licensing: [salwan@albahadly.com](mailto:salwan@albahadly.com) ·
+[www.albahadly.com](https://www.albahadly.com/)
+
 ## License
 
 MIT.

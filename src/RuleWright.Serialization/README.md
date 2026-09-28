@@ -69,6 +69,17 @@ string canonical = RuleHasher.GetCanonicalForm(rule);   // for diagnostics
 
 .NET Framework 4.8, .NET Standard 2.0, .NET 8.0 or .NET 10.0.
 
+## Documentation
+
+📖 [RuleWright documentation](https://docs.albahadly.com/rulewright/) ·
+[The rule document format](https://docs.albahadly.com/rulewright/reference/document-format.html) ·
+[API reference: `RuleWright.Serialization`](https://docs.albahadly.com/rulewright/api/RuleWright.Serialization.html)
+
+## Contact
+
+Questions, support or licensing: [salwan@albahadly.com](mailto:salwan@albahadly.com) ·
+[www.albahadly.com](https://www.albahadly.com/)
+
 ## License
 
 MIT.
