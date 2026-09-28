@@ -68,17 +68,26 @@ jobs:
       - name: Compute version (auto-increment, or honor a manual VersionPrefix bump)
         id: ver
         shell: bash
+        env:
+          # Through the environment, never interpolated into the script: it is free text.
+          PINNED: ${{ github.event.inputs.version }}
         run: |
           set -euo pipefail
           # An explicit version wins outright. This exists for recovery: if a push run
           # dies partway, some package IDs hold the version and some do not, and the
           # odometer below would step past it and strand the ones that already landed
-          # on dependencies that never ship.
-          pinned="${{ github.event.inputs.version }}"
+          # on dependencies that never ship. So an already-published version is allowed
+          # here (--skip-duplicate re-pushes what landed as a no-op), and said out loud.
+          pinned="${PINNED#v}"
+          pinned="${pinned//[[:space:]]/}"
           if [ -n "$pinned" ]; then
-            if [[ ! "$pinned" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "::error::version input '$pinned' is not a 3-part version"
+            if [[ ! "$pinned" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$ ]]; then
+              echo "::error::version input '$PINNED' is not MAJOR.MINOR.PATCH with an optional -prerelease suffix"
               exit 1
+            fi
+            if curl -fsSL "https://api.nuget.org/v3-flatcontainer/rulewright/index.json" 2>/dev/null \
+                | jq -r '.versions[]?' 2>/dev/null | grep -qxF "${pinned,,}"; then
+              echo "::notice::RuleWright $pinned is already on nuget.org: finishing a partial release, packages already there are skipped"
             fi
             echo "version=$pinned" >> "$GITHUB_OUTPUT"
             echo "Publishing $pinned (pinned by workflow input)"

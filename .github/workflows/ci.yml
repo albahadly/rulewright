@@ -1,17 +1,38 @@
 name: CI
 
+# Runs on GitHub-hosted runners (cloud) or on self-hosted runners on the maintainer's
+# machine (local). The CI_RUNNER repository variable picks the default (`cloud` when
+# unset); a manual run can override it with the `runner` input. RUNNERS.md has the setup.
+#
+# A pull request from a FORK always runs in the cloud, whatever the switch says: this
+# repository is public, and a self-hosted runner executes whatever the workflow asks,
+# as the maintainer, on their machine. That check alone is not enough, because a fork's
+# pull request runs the workflow file from the fork, which can say anything; the real
+# guard is the repository setting that holds every outside contributor's run for
+# approval (RUNNERS.md). Read a fork's workflow changes before approving its run.
+
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: Where to run this one run. 'default' follows the CI_RUNNER repository variable.
+        type: choice
+        options: [default, cloud, local]
+        default: default
 
 jobs:
   windows:
     name: Windows (net8.0 + net10.0 + net48)
-    runs-on: windows-latest
+    runs-on: ${{ ((inputs.runner != 'default' && inputs.runner) || vars.CI_RUNNER || 'cloud') == 'local' && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["self-hosted","windows"]') || 'windows-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
+        # A self-hosted runner uses the machine's own SDK and runtimes: the step installs into
+        # Program Files, which a runner running as a normal user cannot write.
+        if: runner.environment != 'self-hosted'
         with:
           dotnet-version: |
             8.0.x
@@ -26,10 +47,11 @@ jobs:
 
   linux:
     name: Linux (net8.0 + net10.0)
-    runs-on: ubuntu-latest
+    runs-on: ${{ ((inputs.runner != 'default' && inputs.runner) || vars.CI_RUNNER || 'cloud') == 'local' && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["self-hosted","linux"]') || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
+        if: runner.environment != 'self-hosted'
         with:
           dotnet-version: |
             8.0.x
